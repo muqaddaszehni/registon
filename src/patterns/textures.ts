@@ -725,3 +725,109 @@ export function tigerDecal(): THREE.CanvasTexture {
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
 }
+
+/**
+ * Spandrel tiger panel — same tiger+sun motif as tigerDecal but
+ * cropped to a square 512×512 aspect, no outer black border frame.
+ * Used as left and right spandrel plane textures on Sher-Dor portal.
+ * The caller mirrors the right-side copy (scale.x = -1) to get the symmetric pair.
+ */
+export function tigerSpandrel(): THREE.CanvasTexture {
+  const S = 512;
+  const [cv, g] = canvas(S, S, 0x1c5d99);
+
+  // --- SUN (upper right) ---
+  const sx = 390, sy = 110, sr = 72;
+  g.fillStyle = px(0xffd740);
+  g.beginPath(); g.arc(sx, sy, sr, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = px(0xffd740); g.lineWidth = 7;
+  for (let i = 0; i < 12; i++) {
+    const a = i * Math.PI / 6;
+    g.beginPath();
+    g.moveTo(sx + Math.cos(a) * (sr + 10), sy + Math.sin(a) * (sr + 10));
+    g.lineTo(sx + Math.cos(a) * (sr + 30), sy + Math.sin(a) * (sr + 30));
+    g.stroke();
+  }
+  // Sun face
+  g.fillStyle = px(0xfffbe0);
+  g.beginPath(); g.arc(sx - 20, sy - 12, 12, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(sx + 20, sy - 12, 12, 0, Math.PI * 2); g.fill();
+  g.fillStyle = px(0x2a1a00);
+  g.beginPath(); g.arc(sx - 18, sy - 10, 6, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(sx + 22, sy - 10, 6, 0, Math.PI * 2); g.fill();
+  g.fillStyle = px(0xaa6030);
+  g.beginPath(); g.moveTo(sx, sy + 6); g.lineTo(sx - 10, sy + 22); g.lineTo(sx + 10, sy + 22); g.closePath(); g.fill();
+  g.strokeStyle = px(0x7a3a00); g.lineWidth = 4;
+  g.beginPath(); g.arc(sx, sy + 14, 20, 0.15, Math.PI - 0.15); g.stroke();
+
+  // --- TIGER body centred at y=290, x=240 ---
+  const tigerColor = 0xe8943a;
+  const stripeColor = 0x8a4a1a;
+  const tby = 290;
+  const tbx = 240;
+
+  // Body ellipse
+  g.fillStyle = px(tigerColor);
+  g.beginPath(); g.ellipse(tbx, tby, 170, 65, 0, 0, Math.PI * 2); g.fill();
+
+  // Head facing right
+  const thx = 420, thy = tby - 16;
+  g.beginPath(); g.arc(thx, thy, 58, 0, Math.PI * 2); g.fill();
+
+  // Ears
+  g.beginPath(); g.moveTo(thx - 28, thy - 44); g.lineTo(thx - 40, thy - 82); g.lineTo(thx - 8, thy - 52); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(thx + 8, thy - 46); g.lineTo(thx + 28, thy - 82); g.lineTo(thx + 38, thy - 46); g.closePath(); g.fill();
+
+  // Eyes
+  g.fillStyle = px(0xffee88);
+  g.beginPath(); g.arc(thx - 22, thy - 6, 13, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(thx + 12, thy - 6, 13, 0, Math.PI * 2); g.fill();
+  g.fillStyle = px(0x1a1a00);
+  g.beginPath(); g.arc(thx - 20, thy - 4, 6, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(thx + 14, thy - 4, 6, 0, Math.PI * 2); g.fill();
+
+  // Nose + mouth
+  g.fillStyle = px(0xcc6633);
+  g.beginPath(); g.moveTo(thx, thy + 16); g.lineTo(thx - 11, thy + 4); g.lineTo(thx + 11, thy + 4); g.closePath(); g.fill();
+  g.strokeStyle = px(0x8a3a10); g.lineWidth = 3;
+  g.beginPath(); g.moveTo(thx, thy + 16); g.lineTo(thx - 11, thy + 28); g.stroke();
+  g.beginPath(); g.moveTo(thx, thy + 16); g.lineTo(thx + 11, thy + 28); g.stroke();
+
+  // Body stripes
+  g.fillStyle = px(stripeColor);
+  for (const [bx, bw, bh, rot] of [
+    [tbx - 80, 18, 68, -0.15],
+    [tbx - 30, 18, 72, -0.05],
+    [tbx + 20, 18, 72,  0.05],
+    [tbx + 72, 18, 66,  0.15],
+  ] as [number, number, number, number][]) {
+    g.save(); g.translate(bx, tby); g.rotate(rot);
+    g.fillRect(-bw / 2, -bh / 2, bw, bh);
+    g.restore();
+  }
+
+  // Tail curling up from back
+  g.strokeStyle = px(tigerColor); g.lineWidth = 20;
+  g.beginPath(); g.moveTo(tbx - 160, tby + 12); g.quadraticCurveTo(tbx - 190, tby - 12, tbx - 200, tby - 60); g.stroke();
+  g.strokeStyle = px(stripeColor); g.lineWidth = 8;
+  g.beginPath(); g.moveTo(tbx - 160, tby + 12); g.quadraticCurveTo(tbx - 190, tby - 12, tbx - 200, tby - 60); g.stroke();
+  g.fillStyle = px(0x3a1a00);
+  g.beginPath(); g.arc(tbx - 200, tby - 64, 14, 0, Math.PI * 2); g.fill();
+
+  // Legs
+  g.fillStyle = px(tigerColor);
+  for (const lx of [tbx - 110, tbx - 60, tbx + 40, tbx + 90]) {
+    g.beginPath(); g.roundRect(lx, tby + 50, 28, 85, 10); g.fill();
+    g.fillStyle = px(0xd0783a);
+    g.beginPath(); g.ellipse(lx + 14, tby + 136, 20, 12, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = px(tigerColor);
+  }
+
+  // Gold inner border only (no outer black frame)
+  g.strokeStyle = px(0xd4af37); g.lineWidth = 8;
+  g.strokeRect(10, 10, S - 20, S - 20);
+
+  const t2 = toTexture(cv);
+  t2.wrapS = t2.wrapT = THREE.ClampToEdgeWrapping;
+  return t2;
+}
