@@ -12,6 +12,7 @@ import { parseLayout } from './world/grid';
 import { LAYOUT } from './world/layout';
 import { Character } from './character/character';
 import { bindTapToMove } from './input';
+import { addHotspotMarkers, hotspotForTile } from './hotspots';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -53,5 +54,10 @@ const hero = new Character(grid);
 scene.add(hero.group);
 onTick(dt => hero.tick(dt));
 bindTapToMove(renderer, camera, ground, grid, hero);
+onTick(addHotspotMarkers(scene, grid));
+hero.onArrive = () => {
+  const id = hotspotForTile(grid, hero.tile);
+  if (id) console.log('hotspot', id); // replaced in Task 14
+};
 
 export { scene, camera, renderer };
