@@ -169,6 +169,19 @@ export function pishtaq(
   door.position.set(0, doorH / 2 + 0.01, backZ + 0.22);
   g.add(door);
 
+  // ── REAR SEALING WALL ────────────────────────────────────────────
+  // Solid patterned wall covering the iwan gap at the back face.
+  // position.set() overrides patternedBoxMulti's internal y=h/2; we must pass
+  // y = rearWallH/2 so the box bottom sits at y=0 (ground level).
+  const rearWallH = iwanH; // seal from ground to lintel height
+  const rearWall = patternedBoxMulti(iwanW, rearWallH, 0.24, C.sand, {
+    nz: bannai(C.sand, C.cream, C.cobalt),  // exterior back face (nz = -Z face)
+    pz: bannaiTex,
+  });
+  // z: back face of portal is at -frontZ; place centre of 0.24-thick wall there
+  rearWall.position.set(0, rearWallH / 2, -(frontZ - 0.12));
+  g.add(rearWall);
+
   // ── ARCH TRIM + FACE (two-layer technique) ─────────────────────
   // Layer 1: CREAM outer arch (slightly wider/taller) — forms the visible trim band
   // Layer 2: DARK inner arch (exact iwan size, protrudes slightly MORE forward)
@@ -250,40 +263,181 @@ export function pishtaq(
   return g;
 }
 
-/** Bulbous turquoise dome on a patterned drum. */
+/** Bulbous turquoise dome on a patterned drum.
+ *  ribbed=true  → melon-fluted dome (Sher-Dor style): 16 soft rounded lobes
+ *                 via custom BufferGeometry with r(θ,φ) = profile(θ) * (1 + A·cos(N·φ))
+ *  ribbed=false → smooth onion dome (Tilya-Kori style): tall narrow onion lathe
+ */
 export function dome(r: number, ribbed = false): THREE.Group {
   const g = new THREE.Group();
-  const drumH = r * 1.1;
-  // Drum uses calligraphyBand — refs show kufic/thuluth band on drums
+
+  // ── DRUM ─────────────────────────────────────────────────────────
+  const drumH = r * 0.75;
+  const drumR  = r * 0.72;
   const drumTex = calligraphyBand(C.lapis, C.cream);
-  drumTex.repeat.set(1, 1);
-  const drum = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.78, drumH, 20),
-    new THREE.MeshLambertMaterial({ map: drumTex }));
+  drumTex.repeat.set(Math.max(1, Math.round(drumR * 2)), 1);
+  const drum = new THREE.Mesh(
+    new THREE.CylinderGeometry(drumR, drumR * 1.05, drumH, 24),
+    new THREE.MeshLambertMaterial({ map: drumTex }),
+  );
   drum.position.y = drumH / 2;
   g.add(drum);
-  const pts: THREE.Vector2[] = [];
-  for (let i = 0; i <= 14; i++) {
-    const a = -0.5 + (i / 14) * (Math.PI / 2 + 0.5); // sweep below equator → onion bulge
-    pts.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r));
-  }
-  const cap = new THREE.Mesh(new THREE.LatheGeometry(pts, 24),
-    new THREE.MeshLambertMaterial({ color: C.turquoise, emissive: new THREE.Color(C.turquoise), emissiveIntensity: 0.12 }));
-  cap.position.y = drumH + r * 0.48;
-  g.add(cap);
-  if (ribbed) {
-    for (let i = 0; i < 16; i++) {
-      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.06 * r, r * 1.7, 0.16 * r),
-        new THREE.MeshLambertMaterial({ color: C.teal }));
-      const a = (i / 16) * Math.PI * 2;
-      rib.position.set(Math.cos(a) * r * 0.92, cap.position.y, Math.sin(a) * r * 0.92);
-      rib.lookAt(0, cap.position.y, 0);
-      rib.rotateX(0.35);
-      g.add(rib);
+
+  // ── CORBEL COLLAR ─────────────────────────────────────────────────
+  const collarY = drumH;
+  const collarH = r * 0.14;
+  const collar = new THREE.Mesh(
+    new THREE.CylinderGeometry(drumR * 1.08, drumR * 1.04, collarH, 24),
+    mat(C.sandLight),
+  );
+  collar.position.y = collarY + collarH / 2;
+  g.add(collar);
+
+  const capBase = collarY + collarH;
+
+  // ── SHARED ONION PROFILE ──────────────────────────────────────────
+  // Piecewise-linear control points: (t, radius).
+  // capH = 2.0r → dome is 2× taller than its belly width → tall onion not flat saucer.
+  // Peak belly only 5% wider than r so the dome reads as compact/spherical, not bulging.
+  const capH = r * 2.0;
+
+  const CTRL: [number, number][] = [
+    [0.00, drumR],        // base: smooth join to collar
+    [0.20, r * 0.98],    // slight flare from collar
+    [0.38, r * 1.05],    // widest belly
+    [0.58, r * 0.88],    // shoulder starts narrowing
+    [0.78, r * 0.45],    // slim upper neck
+    [1.00, 0.0],          // apex point
+  ];
+
+  function profileRad(t: number): number {
+    for (let i = 0; i < CTRL.length - 1; i++) {
+      const [t0, r0] = CTRL[i];
+      const [t1, r1] = CTRL[i + 1];
+      if (t <= t1) {
+        const u = (t - t0) / (t1 - t0);
+        return r0 + (r1 - r0) * u;
+      }
     }
+    return 0;
   }
-  const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.08, 8, 8), mat(C.gold));
-  finial.position.y = cap.position.y + r * 1.05;
-  g.add(finial);
+
+  // Smooth dome: Lambert with slight emissive glow.
+  // Ribbed dome: Phong with flatShading — each faceted rib face gets a distinct
+  // diffuse shading value from the directional light, making ribs read as light/dark stripes.
+  if (ribbed) {
+    // ── MELON-FLUTED CAP via BufferGeometry with stripe texture ────────
+    // Geometry: r(θ,φ) = profile(θ) * (1 + A·cos(N·φ)) — scalloped surface.
+    // Texture: vertical dark stripes at lobe valleys make ribs visible regardless
+    // of lighting (critical because hemisphere lighting washes out geometry shading).
+    const LOBES = 16;
+    const AMP_MAX = 0.18;  // 18% scallop — visible geometry + texture stripe combo
+    const RINGS = 32;
+    const SEGS  = LOBES * 8; // 128 azimuthal segs — smooth geometry
+
+    // Build stripe texture: LOBES dark channels on turquoise
+    const stripeCanvas = document.createElement('canvas');
+    stripeCanvas.width = 512; stripeCanvas.height = 256;
+    const sg = stripeCanvas.getContext('2d')!;
+    // Base turquoise
+    sg.fillStyle = '#42c8c8';
+    sg.fillRect(0, 0, 512, 256);
+    // Dark valley stripes (N stripes across U=0..1)
+    for (let i = 0; i < LOBES; i++) {
+      const cx = (i + 0.5) / LOBES * 512;  // centre of each stripe
+      const sw = 512 / LOBES * 0.28;         // stripe width: 28% of lobe pitch
+      // Dark teal valley
+      sg.fillStyle = '#1a8080';
+      sg.fillRect(cx - sw / 2, 0, sw, 256);
+      // Lighter highlight on ridge peak (halfway between valleys)
+      const px2 = ((i + 1.0) / LOBES) * 512;
+      const hw = sw * 0.5;
+      sg.fillStyle = '#5ae0e0';
+      sg.fillRect(px2 - hw / 2, 0, hw, 256);
+    }
+    // Fade stripes out near top (apex) — top 20% of texture fades to solid
+    const fadeGrad = sg.createLinearGradient(0, 256 * 0.75, 0, 256);
+    fadeGrad.addColorStop(0, 'rgba(66,200,200,0)');
+    fadeGrad.addColorStop(1, 'rgba(66,200,200,1)');
+    sg.fillStyle = fadeGrad;
+    sg.fillRect(0, 256 * 0.75, 512, 256 * 0.25);
+
+    const stripeTex = new THREE.CanvasTexture(stripeCanvas);
+    stripeTex.colorSpace = THREE.SRGBColorSpace;
+    stripeTex.wrapS = THREE.RepeatWrapping;
+    stripeTex.wrapT = THREE.ClampToEdgeWrapping;
+    stripeTex.anisotropy = 4;
+
+    const pos: number[] = [];
+    const uvs: number[] = [];
+
+    for (let ri = 0; ri <= RINGS; ri++) {
+      const t = ri / RINGS;
+      const pr = profileRad(t);
+      const y  = capH * t;
+      const envelope = Math.sin(Math.PI * Math.min(t / 0.80, 1.0));
+      const amp = AMP_MAX * envelope;
+      for (let si = 0; si <= SEGS; si++) {
+        const phi = (si / SEGS) * Math.PI * 2;
+        const sr = pr * (1 + amp * Math.cos(LOBES * phi));
+        pos.push(Math.cos(phi) * sr, y, Math.sin(phi) * sr);
+        // UV: u = azimuth (0..1 wraps LOBES times), v = height (0=base, 1=apex)
+        uvs.push(si / SEGS * LOBES, t);  // repeat LOBES times around azimuth
+      }
+    }
+
+    const idxArr: number[] = [];
+    for (let ri = 0; ri < RINGS; ri++) {
+      for (let si = 0; si < SEGS; si++) {
+        const a = ri * (SEGS + 1) + si;
+        const b = a + 1;
+        const c = (ri + 1) * (SEGS + 1) + si;
+        const d2 = c + 1;
+        idxArr.push(a, c, b, b, c, d2);
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(idxArr);
+    geo.computeVertexNormals();
+
+    const cap = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+      map: stripeTex,
+      emissive: new THREE.Color(C.turquoise),
+      emissiveIntensity: 0.10,
+    }));
+    cap.position.y = capBase;
+    g.add(cap);
+
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 8, 8), mat(C.gold));
+    finial.position.y = capBase + capH + r * 0.06;
+    g.add(finial);
+
+  } else {
+    // ── SMOOTH ONION CAP (TK grand dome) via LatheGeometry ───────────
+    // Points go bottom→top (LatheGeometry sweeps around Y axis).
+    const PROFILE_N = 28;
+    const capPts: THREE.Vector2[] = [];
+    for (let i = 0; i <= PROFILE_N; i++) {
+      const t = i / PROFILE_N;
+      capPts.push(new THREE.Vector2(profileRad(t), capH * t));
+    }
+
+    const cap = new THREE.Mesh(new THREE.LatheGeometry(capPts, 40), new THREE.MeshLambertMaterial({
+      color: C.turquoise,
+      emissive: new THREE.Color(C.turquoise),
+      emissiveIntensity: 0.16,
+    }));
+    cap.position.y = capBase;
+    g.add(cap);
+
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 8, 8), mat(C.gold));
+    finial.position.y = capBase + capH + r * 0.06;
+    g.add(finial);
+  }
+
   return g;
 }
 

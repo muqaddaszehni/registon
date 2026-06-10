@@ -260,138 +260,137 @@ export function calligraphyBand(bg: number, fg: number): THREE.CanvasTexture {
 /**
  * Non-tiling framed panel texture: buff field, kufic-meander border frame,
  * pointed-arch outline inside filled with bannai-style diagonal lattice.
- * Used on wing fronts.
+ * Used on wing fronts. High-contrast cobalt frame + prominent arch outline.
  */
 export function archPanel(w: number, h: number): THREE.CanvasTexture {
-  const W = w, H = h;
+  const W = Math.max(w, 32), H = Math.max(h, 32);
   const [cv, g] = canvas(W, H, C_SAND);
 
-  const frameW = Math.round(W * 0.07);
+  // Wide cobalt border frame (10% of width) — must be visible at iso scale
+  const frameW = Math.round(W * 0.10);
 
-  // --- Outer kufic-meander border frame ---
+  // --- Outer cobalt border frame ---
   g.fillStyle = px(C_COBALT);
   g.fillRect(0, 0, W, frameW);
   g.fillRect(0, H - frameW, W, frameW);
   g.fillRect(0, 0, frameW, H);
   g.fillRect(W - frameW, 0, frameW, H);
 
-  // Inner border accent (cream line)
-  const ib = frameW + 4;
+  // Cream inner accent line
+  const ib = frameW + 3;
   g.strokeStyle = px(C_CREAM);
-  g.lineWidth = 4;
+  g.lineWidth = Math.max(3, Math.round(W * 0.015));
   g.strokeRect(ib, ib, W - ib * 2, H - ib * 2);
 
-  // Draw small kufic step-pattern along the frame strips
+  // Kufic step-pattern along frame strips (cream squares on cobalt)
   g.fillStyle = px(C_CREAM);
-  const stepSize = frameW - 4;
-  const stepsX = Math.floor(W / (stepSize * 1.5));
-  const stepsY = Math.floor(H / (stepSize * 1.5));
+  const stepSize = Math.round(frameW * 0.7);
+  const stepsX = Math.max(2, Math.floor(W / (stepSize * 1.8)));
+  const stepsY = Math.max(2, Math.floor(H / (stepSize * 1.8)));
   for (let i = 0; i < stepsX; i++) {
-    const x = i * (W / stepsX) + (W / stepsX) / 2;
-    const sq = stepSize * 0.5;
-    // top frame steps
-    g.fillRect(x - sq / 2, frameW * 0.25, sq, sq);
-    // bottom frame steps
-    g.fillRect(x - sq / 2, H - frameW * 0.25 - sq, sq, sq);
+    const x = (i + 0.5) * (W / stepsX);
+    const sq = Math.round(stepSize * 0.55);
+    g.fillRect(x - sq / 2, Math.round(frameW * 0.22), sq, sq);
+    g.fillRect(x - sq / 2, H - Math.round(frameW * 0.22) - sq, sq, sq);
   }
   for (let i = 0; i < stepsY; i++) {
-    const y = i * (H / stepsY) + (H / stepsY) / 2;
-    const sq = stepSize * 0.5;
-    g.fillRect(frameW * 0.25, y - sq / 2, sq, sq);
-    g.fillRect(W - frameW * 0.25 - sq, y - sq / 2, sq, sq);
+    const y = (i + 0.5) * (H / stepsY);
+    const sq = Math.round(stepSize * 0.55);
+    g.fillRect(Math.round(frameW * 0.22), y - sq / 2, sq, sq);
+    g.fillRect(W - Math.round(frameW * 0.22) - sq, y - sq / 2, sq, sq);
   }
 
-  // --- Inner field: buff with subtle bannai lattice ---
-  const padding = frameW + 8;
+  // --- Inner field: warm sand with subtle cobalt diamond lattice ---
+  const padding = frameW + Math.round(W * 0.04);
   const innerX = padding, innerY = padding;
   const innerW = W - padding * 2, innerH = H - padding * 2;
 
-  // Draw diagonal lattice inside the panel (scaled to inner region)
-  // Larger cells — about 4 diamonds across the inner field
-  const cellSize = Math.round(innerW * 0.28);
-  const lineW = Math.max(3, Math.round(cellSize * 0.06));
-  const halfCell = cellSize / 2;
-
-  // Clip to inner region
-  g.save();
-  g.beginPath();
-  g.rect(innerX, innerY, innerW, innerH);
-  g.clip();
-
-  // Buff/sand field — warm stone background dominates
-  g.fillStyle = px(C_SAND);
-  g.fillRect(innerX, innerY, innerW, innerH);
-
-  // Diagonal grid lines in cream (very subtle on buff field — low contrast)
-  g.strokeStyle = px(C_CREAM);
-  g.lineWidth = lineW;
-  g.lineCap = 'square';
-  const diag = Math.sqrt(2) * Math.max(innerW, innerH);
-  const count2 = Math.ceil(diag / cellSize) + 4;
-  for (let i = -count2; i < count2 * 2; i++) {
-    const off = i * cellSize;
+  if (innerW > 4 && innerH > 4) {
+    g.save();
     g.beginPath();
-    g.moveTo(innerX + off - innerH, innerY - innerH);
-    g.lineTo(innerX + off + innerH * 2, innerY + innerH * 2);
-    g.stroke();
-    g.beginPath();
-    g.moveTo(innerX + innerW + off - innerH, innerY - innerH);
-    g.lineTo(innerX + off - innerH, innerY + innerH * 2);
-    g.stroke();
-  }
+    g.rect(innerX, innerY, innerW, innerH);
+    g.clip();
 
-  // Diamond centre motifs in cobalt — covering ~30% of inner field area
-  g.fillStyle = px(C_COBALT);
-  const ms = Math.round(cellSize * 0.30);
-  for (let iy = -2; iy < Math.ceil(innerH / halfCell) + 4; iy++) {
-    for (let ix = -2; ix < Math.ceil(innerW / halfCell) + 4; ix++) {
-      const cx = innerX + (ix + iy) * halfCell;
-      const cy = innerY + (iy - ix) * halfCell;
-      if (cx < innerX - cellSize || cx > innerX + innerW + cellSize) continue;
-      if (cy < innerY - cellSize || cy > innerY + innerH + cellSize) continue;
-      const armW2 = Math.round(ms * 0.35);
-      const armL2 = Math.round(ms * 0.5);
-      g.fillRect(cx - ms / 2, cy - ms / 2, ms, ms);
-      g.fillRect(cx - armW2 / 2, cy - ms / 2 - armL2, armW2, armL2);
-      g.fillRect(cx - armW2 / 2, cy + ms / 2, armW2, armL2);
-      g.fillRect(cx - ms / 2 - armL2, cy - armW2 / 2, armL2, armW2);
-      g.fillRect(cx + ms / 2, cy - armW2 / 2, armL2, armW2);
+    // Warm sand field
+    g.fillStyle = px(C_SAND);
+    g.fillRect(innerX, innerY, innerW, innerH);
+
+    // Diagonal lattice lines (cobalt, more visible than cream)
+    const cellSize = Math.round(innerW * 0.30);
+    const lineW2 = Math.max(2, Math.round(cellSize * 0.05));
+    const halfCell = cellSize / 2;
+    g.strokeStyle = px(C_COBALT);
+    g.lineWidth = lineW2;
+    g.globalAlpha = 0.35; // semi-transparent so lattice is subtle but present
+    g.lineCap = 'square';
+    const diagLen = Math.sqrt(2) * Math.max(innerW, innerH);
+    const cnt = Math.ceil(diagLen / cellSize) + 4;
+    for (let i = -cnt; i < cnt * 2; i++) {
+      const off = i * cellSize;
+      g.beginPath();
+      g.moveTo(innerX + off - innerH, innerY - innerH);
+      g.lineTo(innerX + off + innerH * 2, innerY + innerH * 2);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(innerX + innerW + off - innerH, innerY - innerH);
+      g.lineTo(innerX + off - innerH, innerY + innerH * 2);
+      g.stroke();
     }
+    g.globalAlpha = 1.0;
+
+    // Cobalt diamond motifs at intersections
+    g.fillStyle = px(C_COBALT);
+    const ms = Math.round(cellSize * 0.26);
+    for (let iy = -2; iy < Math.ceil(innerH / halfCell) + 4; iy++) {
+      for (let ix = -2; ix < Math.ceil(innerW / halfCell) + 4; ix++) {
+        const cx = innerX + (ix + iy) * halfCell;
+        const cy = innerY + (iy - ix) * halfCell;
+        if (cx < innerX - cellSize || cx > innerX + innerW + cellSize) continue;
+        if (cy < innerY - cellSize || cy > innerY + innerH + cellSize) continue;
+        g.beginPath();
+        g.moveTo(cx, cy - ms);
+        g.lineTo(cx + ms, cy);
+        g.lineTo(cx, cy + ms);
+        g.lineTo(cx - ms, cy);
+        g.closePath();
+        g.fill();
+      }
+    }
+
+    g.restore();
   }
 
-  g.restore();
+  // --- Prominent pointed arch outline ---
+  const archInset = frameW + Math.round(W * 0.06);
+  const aX = archInset;
+  const aW = W - archInset * 2;
+  const aR = aW / 2;
+  const aY = frameW + Math.round(H * 0.04);
+  const aH = H - aY - frameW * 0.5;
 
-  // --- Pointed arch outline inside the field (cobalt outer, turquoise inner) ---
-  const archPad = padding + Math.round(innerW * 0.06);
-  const archX = archPad, archY = padding;
-  const archW = W - archPad * 2, archH = H - padding * 1.5;
-  const archR = archW / 2;
-
-  const archLineW = Math.max(6, lineW + 6);
+  // Cobalt outer arch (thick — dominant feature)
+  const archLW = Math.max(8, Math.round(W * 0.035));
   g.strokeStyle = px(C_COBALT);
-  g.lineWidth = archLineW;
+  g.lineWidth = archLW;
   g.beginPath();
-  g.moveTo(archX, archY + archH - archY);
-  g.lineTo(archX, archY + archR);
-  g.quadraticCurveTo(archX, archY + archR * 0.1, archX + archR, archY);
-  g.quadraticCurveTo(archX + archW, archY + archR * 0.1, archX + archW, archY + archR);
-  g.lineTo(archX + archW, archY + archH - archY);
+  g.moveTo(aX, aY + aH);
+  g.lineTo(aX, aY + aR);
+  g.quadraticCurveTo(aX, aY + aR * 0.08, aX + aR, aY);
+  g.quadraticCurveTo(aX + aW, aY + aR * 0.08, aX + aW, aY + aR);
+  g.lineTo(aX + aW, aY + aH);
   g.stroke();
 
-  // Second inner arch (slightly smaller) — turquoise fill accent
-  const iap = archPad + Math.round(archW * 0.05);
-  const iaW = W - iap * 2;
-  const iaR = iaW / 2;
-  // Draw turquoise spandrel fill between outer arch and frame top
-  g.fillStyle = px(0x42c8c8); // C_TURQUOISE — spandrel accent
-  g.beginPath();
-  g.moveTo(iap + 3, archY + archH - archY);
-  g.lineTo(iap + 3, archY + iaR + 4);
-  g.quadraticCurveTo(iap + 3, archY + iaR * 0.15, iap + iaR, archY + 3);
-  g.quadraticCurveTo(iap + iaW - 3, archY + iaR * 0.15, iap + iaW - 3, archY + iaR + 4);
-  g.lineTo(iap + iaW - 3, archY + archH - archY);
+  // Turquoise inner arch (thinner accent line)
+  const iLW = Math.max(4, Math.round(W * 0.018));
+  const iad = Math.round(aW * 0.07);
   g.strokeStyle = px(0x42c8c8);
-  g.lineWidth = Math.max(3, lineW);
+  g.lineWidth = iLW;
+  g.beginPath();
+  g.moveTo(aX + iad, aY + aH);
+  g.lineTo(aX + iad, aY + (aR - iad));
+  g.quadraticCurveTo(aX + iad, aY + aR * 0.12 + iad, aX + aR, aY + iad);
+  g.quadraticCurveTo(aX + aW - iad, aY + aR * 0.12 + iad, aX + aW - iad, aY + (aR - iad));
+  g.lineTo(aX + aW - iad, aY + aH);
   g.stroke();
 
   const t = new THREE.CanvasTexture(cv);
