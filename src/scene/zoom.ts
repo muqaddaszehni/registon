@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { VIEW_RADIUS, type CameraState } from './camera';
+import { getTier } from './lod';
 
 export const ZOOM_MIN = 0.18;
 export const ZOOM_MAX = 1.0;
@@ -14,6 +15,14 @@ export const PAN_RADIUS_MAX = 13;
 
 export class ZoomController {
   private targetZoom = 1.0;
+  private _tier: 1 | 2 = 1;
+  private _tierCallbacks: Array<(tier: 1 | 2) => void> = [];
+
+  onTierChange(cb: (tier: 1 | 2) => void): void {
+    this._tierCallbacks.push(cb);
+  }
+
+  get currentTier(): 1 | 2 { return this._tier; }
 
   /** Wheel delta: deltaY in pixels, anchor in NDC [-1,1] */
   onWheel(e: WheelEvent, cam: THREE.OrthographicCamera, state: CameraState) {
@@ -64,11 +73,17 @@ export class ZoomController {
   get target() { return this.targetZoom; }
   get isZoomedIn() { return this.targetZoom < 0.95; }
 
-  /** Called each tick — eases state.zoom toward target */
+  /** Called each tick — eases state.zoom toward target; fires tier-change callbacks */
   tick(dt: number, state: CameraState) {
     state.zoom += (this.targetZoom - state.zoom) * Math.min(1, dt * 8);
     if (Math.abs(this.targetZoom - state.zoom) < 0.001) state.zoom = this.targetZoom;
     clampTarget(state);
+
+    const newTier = getTier(state.zoom);
+    if (newTier !== this._tier) {
+      this._tier = newTier;
+      for (const cb of this._tierCallbacks) cb(newTier);
+    }
   }
 }
 
