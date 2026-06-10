@@ -8,6 +8,10 @@ import { cornerButton } from './ui/buttons';
 import { ulughBeg } from './buildings/ulughbeg';
 import { sherDor } from './buildings/sherdor';
 import { tilyaKori } from './buildings/tilyakori';
+import { parseLayout } from './world/grid';
+import { LAYOUT } from './world/layout';
+import { Character } from './character/character';
+import { bindTapToMove } from './input';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -22,7 +26,7 @@ scene.background = makeSky();
 
 const camera = makeCamera();
 addSunsetLights(scene);
-scene.add(makeGround());
+const ground = makeGround(); scene.add(ground);
 
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); sizeCamera(camera); });
 
@@ -43,5 +47,11 @@ cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
 scene.add(ulughBeg());
 scene.add(sherDor());
 scene.add(tilyaKori());
+
+const grid = parseLayout(LAYOUT);
+const hero = new Character(grid);
+scene.add(hero.group);
+onTick(dt => hero.tick(dt));
+bindTapToMove(renderer, camera, ground, grid, hero);
 
 export { scene, camera, renderer };

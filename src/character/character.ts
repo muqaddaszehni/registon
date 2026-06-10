@@ -1,0 +1,63 @@
+import * as THREE from 'three';
+import { C } from '../palette';
+import { mat, shadowed } from '../buildings/primitives';
+import { advance } from './walker';
+import { Grid, Pt } from '../world/grid';
+import { findPath } from './astar';
+import { tileToWorld, V2 } from '../world/coords';
+
+const SPEED = 3.2; // tiles per second
+
+export class Character {
+  group = new THREE.Group();
+  onArrive: (() => void) | null = null;
+  private pos: V2;
+  private waypoints: V2[] = [];
+  private heading = 0;
+
+  constructor(private grid: Grid) {
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.85, 10), mat(C.terracotta));
+    body.position.y = 0.45;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), mat(C.cream));
+    head.position.y = 1.0;
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.18, 10), mat(C.gold));
+    cap.position.y = 1.16;
+    this.group.add(body, head, cap);
+    this.group.scale.setScalar(1.5);
+    shadowed(this.group);
+    this.pos = tileToWorld(grid.cols, grid.rows, grid.spawn);
+    this.group.position.set(this.pos.x, 0, this.pos.z);
+  }
+
+  get worldPos(): V2 { return { ...this.pos }; }
+
+  get tile(): Pt {
+    return { x: Math.round(this.pos.x + this.grid.cols / 2 - 0.5), y: Math.round(this.pos.z + this.grid.rows / 2 - 0.5) };
+  }
+
+  walkTo(target: Pt): boolean {
+    const path = findPath(this.grid, this.tile, target);
+    if (!path) return false;
+    this.waypoints = path.slice(1).map(p => tileToWorld(this.grid.cols, this.grid.rows, p));
+    return true;
+  }
+
+  tick(dt: number) {
+    const wasMoving = this.waypoints.length > 0;
+    const r = advance(this.pos, this.waypoints, SPEED * dt);
+    this.pos = r.pos; this.waypoints = r.waypoints;
+    if (wasMoving) {
+      const t = performance.now() / 1000;
+      this.group.position.set(this.pos.x, Math.abs(Math.sin(t * 10)) * 0.06, this.pos.z);
+      if (r.waypoints.length) {
+        const n = r.waypoints[0];
+        this.heading = Math.atan2(n.x - this.pos.x, n.z - this.pos.z);
+      }
+      this.group.rotation.y = this.heading;
+      if (!this.waypoints.length) {
+        this.group.position.y = 0;
+        this.onArrive?.();
+      }
+    }
+  }
+}
