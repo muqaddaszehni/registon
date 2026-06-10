@@ -13,6 +13,7 @@ import { LAYOUT } from './world/layout';
 import { Character } from './character/character';
 import { bindTapToMove } from './input';
 import { addHotspotMarkers, hotspotForTile } from './hotspots';
+import { Cards } from './ui/cards';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -55,9 +56,10 @@ scene.add(hero.group);
 onTick(dt => hero.tick(dt));
 bindTapToMove(renderer, camera, ground, grid, hero);
 onTick(addHotspotMarkers(scene, grid));
+const cards = new Cards();
 hero.onArrive = () => {
   const id = hotspotForTile(grid, hero.tile);
-  if (id) console.log('hotspot', id); // replaced in Task 14
+  if (id) cards.show(id); else cards.hide();
 };
 
 export { scene, camera, renderer };
