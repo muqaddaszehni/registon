@@ -68,7 +68,7 @@ export function dome(r: number, ribbed = false): THREE.Group {
     pts.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r));
   }
   const cap = new THREE.Mesh(new THREE.LatheGeometry(pts, 24),
-    new THREE.MeshLambertMaterial({ color: C.turquoise }));
+    new THREE.MeshLambertMaterial({ color: C.turquoise, emissive: new THREE.Color(C.turquoise), emissiveIntensity: 0.12 }));
   cap.position.y = drumH + r * 0.48;
   g.add(cap);
   if (ribbed) {

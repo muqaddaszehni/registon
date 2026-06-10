@@ -1,10 +1,19 @@
 export const C = {
-  sand: 0xd9a96c, sandLight: 0xe8c08a, sandDark: 0xb8865a,
-  plaza: 0xe9d3a3, plazaPath: 0xc9a06a,
-  cobalt: 0x1c5d99, lapis: 0x123a66,
-  turquoise: 0x3fc1c9, teal: 0x2a9da6,
-  cream: 0xfff3da, gold: 0xd4af37,
+  // Stone
+  sand: 0xecdfc4, sandLight: 0xf5ecda, sandDark: 0xd4c4a0,
+  // Plaza
+  plaza: 0xeee4d5, plazaPath: 0xd8cebb,
+  // Blues
+  cobalt: 0x1e5fa8, lapis: 0x16396e,
+  // Greens
+  turquoise: 0x42c8c8, teal: 0x2fa8a8,
+  // Accents
+  cream: 0xfff6e3, gold: 0xd9b545,
+  // Ambience
   terracotta: 0xc94f4f, leaf: 0x7fae6a, trunk: 0x9a6b4f,
   dove: 0xf2ece0,
-  skyTop: 0x8d6a9f, skyBottom: 0xf7b690, sun: 0xffb070,
+  // Sky
+  skyTop: 0x9b8bb0, skyBottom: 0xf5c9a0, sun: 0xffd9b0,
+  // Lighting helpers
+  skyFill: 0xf0e8d8, bounce: 0xe8d8b0,
 } as const;
