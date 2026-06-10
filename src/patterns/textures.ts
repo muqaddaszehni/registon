@@ -21,6 +21,396 @@ function toTexture(cv: HTMLCanvasElement, repeatX = 1, repeatY = 1): THREE.Canva
   return t;
 }
 
+/**
+ * Banna'i (bannai) diagonal brick lattice — the workhorse pattern.
+ * 1024² tileable canvas: diagonal grid of cream lines forming diamonds,
+ * with a small square-meander cross motif inside each diamond.
+ * bg = field colour, line = outline colour, motif = inner accent colour.
+ */
+export function bannai(bg: number, line: number, motif: number): THREE.CanvasTexture {
+  const S = 1024;
+  const [cv, g] = canvas(S, S, bg);
+
+  // Diamond cell size: one full diamond spans cellSize along each diagonal axis
+  // 256px → 4 diamonds per tile; combined with PATTERN_WORLD=5 → ~6 diamonds across a 7-unit face
+  const cellSize = 256;
+  const lineW = 15;     // px stroke width (~6% of cell)
+
+  // Draw diagonal grid lines: two families of lines at +45° and -45°
+  g.strokeStyle = px(line);
+  g.lineWidth = lineW;
+  g.lineCap = 'square';
+
+  // We draw lines from outside the canvas to ensure coverage at edges
+  const diag = Math.sqrt(2) * S;
+  const step = cellSize;
+  const count = Math.ceil(diag / step) + 4;
+
+  // Family 1: top-left to bottom-right (+45°) — offset along perpendicular
+  for (let i = -count; i < count * 2; i++) {
+    const offset = i * step;
+    g.beginPath();
+    g.moveTo(offset - S, -S);
+    g.lineTo(offset + S * 2, S * 2);
+    g.stroke();
+  }
+  // Family 2: top-right to bottom-left (−45°)
+  for (let i = -count; i < count * 2; i++) {
+    const offset = i * step;
+    g.beginPath();
+    g.moveTo(offset + S, -S);
+    g.lineTo(offset - S, S * 2);
+    g.stroke();
+  }
+
+  // Now draw a small square-meander cross motif at each diamond centre
+  // Diamond centres are at half-cell offsets on both diagonals
+  const halfCell = cellSize / 2;
+  // Motif size: about 35% of cell width
+  const ms = Math.round(cellSize * 0.28);
+
+  g.fillStyle = px(motif);
+
+  for (let iy = -2; iy < Math.ceil(S / halfCell) + 2; iy++) {
+    for (let ix = -2; ix < Math.ceil(S / halfCell) + 2; ix++) {
+      // Diamond centre in rotated grid: transform back to screen coords
+      const cx = (ix + iy) * halfCell;
+      const cy = (iy - ix) * halfCell;
+      if (cx < -cellSize || cx > S + cellSize || cy < -cellSize || cy > S + cellSize) continue;
+
+      // Small square-meander cross: a plus (+) shape made of 3 rects
+      // Centre square
+      g.fillRect(cx - ms / 2, cy - ms / 2, ms, ms);
+      // Four arms (short)
+      const armW = Math.round(ms * 0.35);
+      const armL = Math.round(ms * 0.55);
+      // top arm
+      g.fillRect(cx - armW / 2, cy - ms / 2 - armL, armW, armL);
+      // bottom arm
+      g.fillRect(cx - armW / 2, cy + ms / 2, armW, armL);
+      // left arm
+      g.fillRect(cx - ms / 2 - armL, cy - armW / 2, armL, armW);
+      // right arm
+      g.fillRect(cx + ms / 2, cy - armW / 2, armL, armW);
+
+      // Small corner accents (rotated squares)
+      const dotR = Math.round(ms * 0.14);
+      const dotOff = Math.round(ms * 0.55);
+      for (const [dx, dy] of [[-dotOff, -dotOff], [dotOff, -dotOff], [-dotOff, dotOff], [dotOff, dotOff]]) {
+        g.save();
+        g.translate(cx + dx, cy + dy);
+        g.rotate(Math.PI / 4);
+        g.fillRect(-dotR, -dotR, dotR * 2, dotR * 2);
+        g.restore();
+      }
+    }
+  }
+
+  return toTexture(cv);
+}
+
+/**
+ * Square swastika-meander interlock (hazarbaf) — portal flank panels.
+ * 512² tileable. bg = field, fg = pattern lines.
+ */
+export function meander(bg: number, fg: number): THREE.CanvasTexture {
+  const S = 512;
+  const [cv, g] = canvas(S, S, bg);
+
+  // Cell size: 128px → 4 repeats across tile
+  const cs = 128;
+  const lw = 14; // line width
+
+  g.fillStyle = px(fg);
+
+  // Draw swastika-meander: a right-angle hook pattern that interlocks
+  // Each cell draws one swastika arm; the full tile makes the interlock
+  for (let row = 0; row < S / cs + 1; row++) {
+    for (let col = 0; col < S / cs + 1; col++) {
+      const ox = col * cs;
+      const oy = row * cs;
+
+      // Outer border of cell
+      const inset = 10;
+      // Stroke border
+      g.strokeStyle = px(fg);
+      g.lineWidth = lw;
+      g.strokeRect(ox + inset, oy + inset, cs - inset * 2, cs - inset * 2);
+
+      // Inner meander cross (swastika-ish)
+      const mid = cs / 2;
+      const aw = lw;
+
+      // Horizontal bar
+      g.fillRect(ox + inset + lw, oy + oy - oy + mid - aw / 2, cs - inset * 2 - lw * 2, aw);
+      // Vertical bar
+      g.fillRect(ox + mid - aw / 2, oy + inset + lw, aw, cs - inset * 2 - lw * 2);
+
+      // Four corner L-bends (makes the meander/swastika interlocking effect)
+      g.fillStyle = px(bg);
+      // Erase quarters to create the swastika rotation
+      if ((row + col) % 2 === 0) {
+        // top-right quadrant: erase bottom-left of that quadrant
+        g.fillRect(ox + mid + aw / 2, oy + mid + aw / 2, cs / 2 - inset - lw, cs / 2 - inset - lw);
+        // bottom-left quadrant: erase top-right of that quadrant
+        g.fillRect(ox + inset + lw, oy + inset + lw, cs / 2 - inset - lw, cs / 2 - inset - lw);
+      } else {
+        // top-left quadrant: erase bottom-right
+        g.fillRect(ox + inset + lw, oy + mid + aw / 2, cs / 2 - inset - lw, cs / 2 - inset - lw);
+        // bottom-right quadrant: erase top-left
+        g.fillRect(ox + mid + aw / 2, oy + inset + lw, cs / 2 - inset - lw, cs / 2 - inset - lw);
+      }
+      g.fillStyle = px(fg);
+    }
+  }
+
+  return toTexture(cv);
+}
+
+/**
+ * Stylized thuluth-like calligraphy band.
+ * 1024×256. NOT real letters — flowing vertical strokes with varied heights and dots.
+ * White on cobalt, reads as calligraphy at distance.
+ */
+export function calligraphyBand(bg: number, fg: number): THREE.CanvasTexture {
+  const W = 1024, H = 256;
+  const [cv, g] = canvas(W, H, bg);
+
+  // Top and bottom border stripes
+  g.fillStyle = px(fg);
+  g.fillRect(0, 0, W, 18);
+  g.fillRect(0, H - 18, W, 18);
+
+  // Inner border lines
+  g.strokeStyle = px(fg);
+  g.lineWidth = 4;
+  g.strokeRect(6, 6, W - 12, H - 12);
+
+  // Generate pseudo-calligraphic strokes
+  // Pattern of tall/short vertical strokes with horizontal connectors and dots
+  const glyphData = [
+    // [x, strokeH, hasTopCross, hasDot, crossW]
+    [50,  160, true,  false, 80],
+    [80,  100, false, true,  0],
+    [115, 170, true,  false, 70],
+    [155, 120, false, false, 50],
+    [185, 150, true,  true,  60],
+    [230, 90,  false, false, 0],
+    [265, 160, true,  false, 90],
+    [305, 130, false, true,  0],
+    [335, 110, false, false, 50],
+    [370, 165, true,  false, 75],
+    [420, 80,  false, true,  0],
+    [455, 155, true,  false, 85],
+    [490, 125, false, false, 60],
+    [525, 145, true,  true,  70],
+    [570, 90,  false, false, 0],
+    [605, 165, true,  false, 95],
+    [645, 120, false, true,  0],
+    [675, 105, false, false, 50],
+    [710, 160, true,  false, 80],
+    [760, 85,  false, true,  0],
+    [795, 155, true,  false, 75],
+    [830, 130, false, false, 60],
+    [860, 145, true,  true,  70],
+    [905, 90,  false, false, 0],
+    [940, 160, true,  false, 90],
+    [975, 110, false, true,  0],
+  ] as [number, number, boolean, boolean, number][];
+
+  const baseY = H - 28; // bottom of strokes
+
+  for (const [x, strokeH, hasTopCross, hasDot, crossW] of glyphData) {
+    const sw = 12; // stroke width
+    const topY = baseY - strokeH;
+
+    // Main vertical stroke (slightly tapered — wider at bottom)
+    g.fillStyle = px(fg);
+    g.beginPath();
+    g.moveTo(x - sw / 2 - 2, baseY);
+    g.lineTo(x - sw / 2, topY);
+    g.lineTo(x + sw / 2, topY);
+    g.lineTo(x + sw / 2 + 2, baseY);
+    g.closePath();
+    g.fill();
+
+    // Horizontal cross at top (like alif with crossbar)
+    if (hasTopCross && crossW > 0) {
+      const crossH = 10;
+      g.fillRect(x - crossW / 2, topY - crossH, crossW, crossH);
+      // Small serifs on ends
+      g.fillRect(x - crossW / 2 - 4, topY - crossH - 4, 8, crossH + 4);
+      g.fillRect(x + crossW / 2 - 4, topY - crossH - 4, 8, crossH + 4);
+    }
+
+    // Dot accent below baseline or above stroke
+    if (hasDot) {
+      const dotR = 7;
+      g.beginPath();
+      g.arc(x, topY - 22, dotR, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // Curved baseline connector to next visible stroke (subtle horizontal link)
+    g.strokeStyle = px(fg);
+    g.lineWidth = 5;
+    g.beginPath();
+    g.moveTo(x + sw / 2, baseY - 8);
+    g.quadraticCurveTo(x + 20, baseY + 4, x + 34, baseY - 12);
+    g.stroke();
+  }
+
+  return toTexture(cv, 2, 1);
+}
+
+/**
+ * Non-tiling framed panel texture: buff field, kufic-meander border frame,
+ * pointed-arch outline inside filled with bannai-style diagonal lattice.
+ * Used on wing fronts.
+ */
+export function archPanel(w: number, h: number): THREE.CanvasTexture {
+  const W = w, H = h;
+  const [cv, g] = canvas(W, H, C_SAND);
+
+  const frameW = Math.round(W * 0.07);
+
+  // --- Outer kufic-meander border frame ---
+  g.fillStyle = px(C_COBALT);
+  g.fillRect(0, 0, W, frameW);
+  g.fillRect(0, H - frameW, W, frameW);
+  g.fillRect(0, 0, frameW, H);
+  g.fillRect(W - frameW, 0, frameW, H);
+
+  // Inner border accent (cream line)
+  const ib = frameW + 4;
+  g.strokeStyle = px(C_CREAM);
+  g.lineWidth = 4;
+  g.strokeRect(ib, ib, W - ib * 2, H - ib * 2);
+
+  // Draw small kufic step-pattern along the frame strips
+  g.fillStyle = px(C_CREAM);
+  const stepSize = frameW - 4;
+  const stepsX = Math.floor(W / (stepSize * 1.5));
+  const stepsY = Math.floor(H / (stepSize * 1.5));
+  for (let i = 0; i < stepsX; i++) {
+    const x = i * (W / stepsX) + (W / stepsX) / 2;
+    const sq = stepSize * 0.5;
+    // top frame steps
+    g.fillRect(x - sq / 2, frameW * 0.25, sq, sq);
+    // bottom frame steps
+    g.fillRect(x - sq / 2, H - frameW * 0.25 - sq, sq, sq);
+  }
+  for (let i = 0; i < stepsY; i++) {
+    const y = i * (H / stepsY) + (H / stepsY) / 2;
+    const sq = stepSize * 0.5;
+    g.fillRect(frameW * 0.25, y - sq / 2, sq, sq);
+    g.fillRect(W - frameW * 0.25 - sq, y - sq / 2, sq, sq);
+  }
+
+  // --- Inner field: bannai lattice ---
+  const padding = frameW + 8;
+  const innerX = padding, innerY = padding;
+  const innerW = W - padding * 2, innerH = H - padding * 2;
+
+  // Draw diagonal lattice inside the panel (scaled to inner region)
+  const cellSize = Math.round(innerW * 0.22);
+  const lineW = Math.max(3, Math.round(cellSize * 0.07));
+  const halfCell = cellSize / 2;
+
+  // Clip to inner region
+  g.save();
+  g.beginPath();
+  g.rect(innerX, innerY, innerW, innerH);
+  g.clip();
+
+  // Fill with cobalt — blue field with cream lattice (matches ulughbeg-portal ref)
+  g.fillStyle = px(C_COBALT);
+  g.fillRect(innerX, innerY, innerW, innerH);
+
+  // Diagonal grid lines in cream
+  g.strokeStyle = px(C_CREAM);
+  g.lineWidth = lineW;
+  g.lineCap = 'square';
+  const diag = Math.sqrt(2) * Math.max(innerW, innerH);
+  const count2 = Math.ceil(diag / cellSize) + 4;
+  for (let i = -count2; i < count2 * 2; i++) {
+    const off = i * cellSize;
+    g.beginPath();
+    g.moveTo(innerX + off - innerH, innerY - innerH);
+    g.lineTo(innerX + off + innerH * 2, innerY + innerH * 2);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(innerX + innerW + off - innerH, innerY - innerH);
+    g.lineTo(innerX + off - innerH, innerY + innerH * 2);
+    g.stroke();
+  }
+
+  // Cross motifs at diamond centres (sand/gold on cobalt field)
+  g.fillStyle = px(C_GOLD);
+  const ms = Math.round(cellSize * 0.28);
+  for (let iy = -2; iy < Math.ceil(innerH / halfCell) + 4; iy++) {
+    for (let ix = -2; ix < Math.ceil(innerW / halfCell) + 4; ix++) {
+      const cx = innerX + (ix + iy) * halfCell;
+      const cy = innerY + (iy - ix) * halfCell;
+      if (cx < innerX - cellSize || cx > innerX + innerW + cellSize) continue;
+      if (cy < innerY - cellSize || cy > innerY + innerH + cellSize) continue;
+      const armW2 = Math.round(ms * 0.35);
+      const armL2 = Math.round(ms * 0.5);
+      g.fillRect(cx - ms / 2, cy - ms / 2, ms, ms);
+      g.fillRect(cx - armW2 / 2, cy - ms / 2 - armL2, armW2, armL2);
+      g.fillRect(cx - armW2 / 2, cy + ms / 2, armW2, armL2);
+      g.fillRect(cx - ms / 2 - armL2, cy - armW2 / 2, armL2, armW2);
+      g.fillRect(cx + ms / 2, cy - armW2 / 2, armL2, armW2);
+    }
+  }
+
+  g.restore();
+
+  // --- Pointed arch outline inside the field ---
+  const archPad = padding + Math.round(innerW * 0.06);
+  const archX = archPad, archY = padding;
+  const archW = W - archPad * 2, archH = H - padding * 1.5;
+  const archR = archW / 2;
+
+  g.strokeStyle = px(C_GOLD);
+  g.lineWidth = Math.max(4, lineW + 4);
+  g.beginPath();
+  g.moveTo(archX, archY + archH - archY);
+  g.lineTo(archX, archY + archR);
+  g.quadraticCurveTo(archX, archY + archR * 0.1, archX + archR, archY);
+  g.quadraticCurveTo(archX + archW, archY + archR * 0.1, archX + archW, archY + archR);
+  g.lineTo(archX + archW, archY + archH - archY);
+  g.stroke();
+
+  // Second inner arch (slightly smaller) for layered frame effect
+  const iap = archPad + Math.round(archW * 0.05);
+  const iaW = W - iap * 2;
+  const iaR = iaW / 2;
+  g.strokeStyle = px(C_CREAM);
+  g.lineWidth = Math.max(2, lineW - 2);
+  g.beginPath();
+  g.moveTo(iap, archY + archH - archY);
+  g.lineTo(iap, archY + iaR);
+  g.quadraticCurveTo(iap, archY + iaR * 0.1, iap + iaR, archY);
+  g.quadraticCurveTo(iap + iaW, archY + iaR * 0.1, iap + iaW, archY + iaR);
+  g.lineTo(iap + iaW, archY + archH - archY);
+  g.stroke();
+
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = 8;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  return t;
+}
+
+// Internal colour constants used by archPanel (avoids importing palette)
+const C_SAND = 0xecdfc4;
+const C_COBALT = 0x1e5fa8;
+const C_CREAM = 0xfff6e3;
+const C_GOLD = 0xd9b545;
+
 /** 8-pointed girih star lattice: proper 8-pointed star polygon with inner/outer radii. */
 export function girih(bg: number, star: number, accent: number, cells = 4): THREE.CanvasTexture {
   const S = 256;
