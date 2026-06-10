@@ -3,6 +3,8 @@ import { makeSky } from './scene/sky';
 import { makeCamera, sizeCamera } from './scene/camera';
 import { addSunsetLights } from './scene/lights';
 import { makeGround } from './scene/ground';
+import { Orbit } from './scene/orbit';
+import { cornerButton } from './ui/buttons';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -30,5 +32,9 @@ renderer.setAnimationLoop(() => {
   for (const t of tickers) t(dt);
   renderer.render(scene, camera);
 });
+
+const orbit = new Orbit(camera);
+onTick(dt => orbit.tick(dt));
+cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
 
 export { scene, camera, renderer };
