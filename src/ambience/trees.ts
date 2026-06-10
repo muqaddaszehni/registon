@@ -3,8 +3,8 @@ import { C } from '../palette';
 import { mat, shadowed } from '../buildings/primitives';
 
 // World positions verified: walkable tiles, min 5.39 units from any hotspot/spawn
-// (10.5,7.5)→tile(24,18), (-8.5,7.5)→tile(5,18), (5.5,3.5)→tile(19,14)
-const TREE_SPOTS: [number, number][] = [[10.5, 7.5], [-8.5, 7.5], [5.5, 3.5]];
+// (10.5,7.5)→tile(24,18), (-6.5,5.5)→tile(7,16), (5.5,3.5)→tile(19,14)
+const TREE_SPOTS: [number, number][] = [[10.5, 7.5], [-6.5, 5.5], [5.5, 3.5]];
 
 export function addTrees(scene: THREE.Scene): (dt: number) => void {
   for (const [x, z] of TREE_SPOTS) {
@@ -27,11 +27,11 @@ export function addTrees(scene: THREE.Scene): (dt: number) => void {
   const seed = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     const [tx, tz] = TREE_SPOTS[i % TREE_SPOTS.length];
-    pos.set([tx + (i % 7) - 3, 1 + (i % 5) * 0.6, tz + (i % 5) - 2], i * 3);
+    pos.set([Math.min(tx + (i % 7) - 3, 10), 1 + (i % 5) * 0.6, tz + (i % 5) - 2], i * 3);
     seed[i] = i * 0.61;
   }
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: C.leaf, size: 0.12 }));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: C.leaf, size: 0.22 }));
   scene.add(pts);
 
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -43,7 +43,7 @@ export function addTrees(scene: THREE.Scene): (dt: number) => void {
     for (let i = 0; i < N; i++) {
       a.setX(i, a.getX(i) + Math.sin(t + seed[i]) * dt * 0.4 + dt * 0.15);
       a.setY(i, 1.2 + Math.sin(t * 0.7 + seed[i]) * 0.8);
-      if (a.getX(i) > 14) a.setX(i, -10);
+      if (a.getX(i) > 10) a.setX(i, -10);
     }
     a.needsUpdate = true;
   };

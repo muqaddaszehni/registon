@@ -45,7 +45,7 @@ export function addDoves(scene: THREE.Scene, grid: Grid, heroPos: () => V2): (dt
       if (dd > 0.05) {
         d.pos.x += (dx / dd) * speed * dt;
         d.pos.z += (dz / dd) * speed * dt;
-        d.g.rotation.y = Math.atan2(dx, dz) + Math.PI / 2;
+        d.g.rotation.y = Math.atan2(-dz, dx);
       } else if (dist < 1.6 && reduced) {
         d.target = spot(d.phase + Math.floor(hp.x * 3));
       }
