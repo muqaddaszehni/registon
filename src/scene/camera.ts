@@ -17,7 +17,7 @@ export function azimuthFor(i: number): number {
 
 export function placeCamera(cam: THREE.OrthographicCamera, azimuth: number) {
   cam.position.set(Math.sin(azimuth) * DIST, DIST * ELEV, Math.cos(azimuth) * DIST);
-  cam.lookAt(0, 0, 0);
+  cam.lookAt(0, 3, 0);  // raised to recentre taller portals and minarets
 }
 
 export function sizeCamera(cam: THREE.OrthographicCamera) {
