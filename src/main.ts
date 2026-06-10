@@ -20,6 +20,7 @@ import { addHotspotMarkers, hotspotForTile } from './hotspots';
 import { Cards } from './ui/cards';
 import { addTrees } from './ambience/trees';
 import { addDoves } from './ambience/doves';
+import { addGardens } from './ambience/gardens';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -74,6 +75,7 @@ hero.onArrive = () => {
 };
 
 onTick(addTrees(scene));
+addGardens(scene);
 onTick(addDoves(scene, grid, () => hero.worldPos));
 
 export { scene, camera, renderer };
