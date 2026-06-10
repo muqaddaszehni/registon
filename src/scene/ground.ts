@@ -40,7 +40,7 @@ export function makeGround(): THREE.Mesh {
   // Lifted toward white to compensate for MeshLambertMaterial lighting attenuation.
   // The sunset light at low altitude only hits the floor at ~36% incidence,
   // so the canvas base must be near-white-cream to read as pale warm stone after shading.
-  const plazaNum = lightenNum(C.plaza, 0.28); // ~0xf3ecdf — pale warm cream
+  const plazaNum = lightenNum(C.plaza, 0.42); // ~0xf6f1e8 — near-white warm cream for MeshLambertMaterial compensation
   g.fillStyle = hex(plazaNum);
   g.fillRect(0, 0, W, H);
 

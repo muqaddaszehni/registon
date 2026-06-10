@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { girih, bannai, calligraphyBand, archPanel, tigerSpandrel } from '../patterns/textures';
+import { girih, bannai, meander, calligraphyBand, archPanel, tigerSpandrel } from '../patterns/textures';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 const matMap = (map: THREE.Texture) => new THREE.MeshLambertMaterial({ map });
@@ -307,9 +307,10 @@ export function dome(r: number, ribbed = false): THREE.Group {
   const CTRL: [number, number][] = [
     [0.00, drumR],        // base: smooth join to collar
     [0.15, r * 0.92],    // rise from collar — slightly narrower than drum
-    [0.32, r * 1.06],    // widest belly — modest swell (was 1.05, stays close to 1.0r)
+    [0.32, r * 1.06],    // widest belly — modest swell
     [0.50, r * 0.72],    // shoulder narrows sharply — key onion pinch zone
     [0.68, r * 0.30],    // slim neck — tight like true Central Asian onion
+    [0.84, r * 0.12],    // taper toward apex — added for rounder, non-tent apex
     [1.00, 0.0],          // apex point
   ];
 
@@ -504,19 +505,41 @@ export function minaret(h: number): THREE.Group {
   return g;
 }
 
-/** Two-storey arcade wall: bannai side faces, arch-panel front, calligraphy top band. */
-export function arcadeWall(len: number, h: number, d: number): THREE.Group {
+/**
+ * Two-storey arcade wall: patterned side faces, arch-panel front, calligraphy top band.
+ * wingStyle controls the exterior face identity:
+ *   'diagonal-lattice' (default / UB): bannai diagonal with star accents
+ *   'meander' (SD): meander-dominant colorway — cobalt/cream swastika-meander
+ *   'arch-floral' (TK): arch panels with warm floral-ish accent (gold dots on cream)
+ */
+export function arcadeWall(
+  len: number, h: number, d: number,
+  wingStyle: 'diagonal-lattice' | 'meander' | 'arch-floral' = 'diagonal-lattice',
+): THREE.Group {
   const g = new THREE.Group();
 
-  // Wall slab: bannai on all exterior faces; arch panels placed proud on +Z front
-  // buff field, cream lattice lines (subtle), cobalt diamond motifs (~30% area)
-  const bannaiTex = bannai(C.sand, C.cream, C.cobalt);
-  const bannaiInnerTex = bannai(C.sand, C.cream, C.sandDark); // muted field behind panels
+  let extTex: THREE.Texture;
+  let innerTex: THREE.Texture;
+  if (wingStyle === 'meander') {
+    // SD: meander-dominant — rich cobalt/cream interlocking swastika grid
+    extTex  = meander(C.cobalt, C.cream);
+    innerTex = meander(C.cobalt, C.sandLight);
+  } else if (wingStyle === 'arch-floral') {
+    // TK: warm gold-accent field — bannai with gold motif dots instead of cobalt
+    extTex  = bannai(C.sand, C.cream, C.gold);
+    innerTex = bannai(C.sandLight, C.cream, C.gold);
+  } else {
+    // UB default: diagonal lattice with star (cobalt diamond) accents
+    extTex  = bannai(C.sand, C.cream, C.cobalt);
+    innerTex = bannai(C.sand, C.cream, C.sandDark);
+  }
+
+  // Wall slab: patterned on all exterior faces; arch panels placed proud on +Z front
   g.add(patternedBoxMulti(len, h, d, C.sand, {
-    pz: bannaiInnerTex, // front wall behind panels — subtle so arch panels pop
-    px: bannaiTex,
-    nx: bannaiTex,
-    nz: bannaiTex,  // outside back
+    pz: innerTex, // front wall behind panels — subtle so arch panels pop
+    px: extTex,
+    nx: extTex,
+    nz: extTex,  // outside back
   }));
 
   // Front face: two rows of framed arch panels (flat planes proud of wall)

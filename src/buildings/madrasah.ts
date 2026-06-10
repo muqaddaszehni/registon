@@ -13,6 +13,8 @@ export interface MadrasahOpts {
   decals?: 'tigers';
   /** Corner turrets at facade ends — patterned cylinder + small dome cap */
   turrets?: { offset: number; h: number; r: number }[];
+  /** Wing texture identity: 'diagonal-lattice'(default/UB) | 'meander'(SD) | 'arch-floral'(TK) */
+  wingStyle?: 'diagonal-lattice' | 'meander' | 'arch-floral';
 }
 
 export function madrasah(o: MadrasahOpts): THREE.Group {
@@ -80,7 +82,7 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   raised.add(portal);
 
   for (const side of [-1, 1]) {
-    const wing = arcadeWall(wingLen, o.wingH, o.portal.d * 0.8);
+    const wing = arcadeWall(wingLen, o.wingH, o.portal.d * 0.8, o.wingStyle);
     wing.position.x = side * (o.portal.w / 2 + wingLen / 2);
     raised.add(wing);
   }

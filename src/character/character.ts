@@ -16,15 +16,26 @@ export class Character {
   private heading = 0;
 
   constructor(private grid: Grid) {
-    const body = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.85, 10), mat(C.terracotta));
+    // Slimmer cone body (was r=0.32 → 0.24), same terracotta
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.85, 10), mat(C.terracotta));
     body.position.y = 0.45;
+    // Cream head (unchanged)
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), mat(C.cream));
     head.position.y = 1.0;
+    // Gold cap (unchanged)
     const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.18, 10), mat(C.gold));
     cap.position.y = 1.16;
+    // Nose pointing outward (heading indicator)
     const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), mat(C.cream));
     nose.position.set(0, 1.0, 0.16);
-    this.group.add(body, head, cap, nose);
+    // Scarf band: thin torus where head meets body — cream accent
+    const scarf = new THREE.Mesh(
+      new THREE.TorusGeometry(0.19, 0.03, 6, 16),
+      mat(C.cream),
+    );
+    scarf.rotation.x = Math.PI / 2;
+    scarf.position.y = 0.84; // at neck — where sphere base meets cone tip
+    this.group.add(body, head, cap, nose, scarf);
     this.group.scale.setScalar(1.5);
     shadowed(this.group);
     this.pos = tileToWorld(grid.cols, grid.rows, grid.spawn);

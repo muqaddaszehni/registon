@@ -12,6 +12,7 @@ export function tilyaKori() {
       { offset: -13.5, h: 7, r: 0.9 },
       { offset:  13.5, h: 7, r: 0.9 },
     ],
+    wingStyle: 'arch-floral', // TK: gold-accent floral (warm, floral-ish identity)
   });
   // faces +Z → south (default orientation), no rotation
   g.position.set(0, 0, -12.5);  // front face at z = -10.0 (clear of walkable row 3 ≈ -7)

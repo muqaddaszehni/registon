@@ -24,12 +24,12 @@ import { addGardens } from './ambience/gardens';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2.0)); // cap at 2× — dpr3 devices still look crisp
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
+renderer.toneMappingExposure = 1.1; // slightly reduced to keep warm floor tones, not blow them out
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
