@@ -11,7 +11,7 @@ const css = `
 .card .close { position: absolute; top: 8px; right: 12px; border: none; background: none;
   font-size: 20px; cursor: pointer; color: #2a2350; }
 @media (orientation: portrait) {
-  .card { bottom: 0; border-radius: 14px 14px 0 0; width: 100vw; }
+  #ui .card { bottom: 0; border-radius: 14px 14px 0 0; width: 100vw; }
 }
 .langtoggle { position: absolute; left: 16px; bottom: 16px; border: none; cursor: pointer;
   background: #123a66; color: #fff3da; border-radius: 22px; padding: 10px 18px; font-size: 14px; }
