@@ -264,10 +264,10 @@ export function pishtaq(
   const archOuter  = iwanW + trimW * 2;    // outer arch width for cream layer
   const archOuterH = iwanH + trimW * 1.4;  // outer arch height for cream layer
 
-  // Cream outer arch — use MeshBasicMaterial so lighting doesn't dim the cream trim
+  // Cream outer arch — Lambert with low emissive so it reads bright-but-matte without blooming
   const trimFace = new THREE.Mesh(
     new THREE.ExtrudeGeometry(archShape(archOuter, archOuterH), { depth: 0.24, bevelEnabled: false }),
-    new THREE.MeshBasicMaterial({ color: C.cream }),
+    new THREE.MeshLambertMaterial({ color: C.cream, emissive: new THREE.Color(C.cream), emissiveIntensity: 0.35 }),
   );
   trimFace.position.set(0, 0, frontZ - 0.20);
   g.add(trimFace);
