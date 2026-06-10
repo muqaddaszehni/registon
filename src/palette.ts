@@ -16,6 +16,4 @@ export const C = {
   dove: 0xf2ece0,
   // Sky
   skyTop: 0x9b8bb0, skyBottom: 0xf5c9a0, sun: 0xffd9b0,
-  // Lighting helpers
-  skyFill: 0xf0e8d8, bounce: 0xe8d8b0,
 } as const;

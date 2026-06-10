@@ -72,13 +72,6 @@ function archShape(w: number, h: number): THREE.Shape {
   return s;
 }
 
-export function archNiche(w: number, h: number, depth: number, color: number): THREE.Mesh {
-  const geo = new THREE.ExtrudeGeometry(archShape(w, h), { depth, bevelEnabled: false });
-  const m = new THREE.Mesh(geo, mat(color));
-  return m; // caller positions; extrudes toward +Z
-}
-
-
 /**
  * Monumental portal with anatomically-correct parts:
  *   - Two flanking PYLON boxes (bannai-patterned)
