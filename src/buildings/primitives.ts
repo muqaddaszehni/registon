@@ -42,8 +42,9 @@ export function patternedBoxMulti(
   function faceTexRepeat(tex: THREE.Texture, worldW: number, worldH: number): THREE.Material {
     const t = tex.clone();
     t.needsUpdate = true;
-    const PATTERN_WORLD = 5.0; // one bannai tile = 5 world units (4 diamonds/tile → ~1.25 wu/diamond)
-    t.repeat.set(worldW / PATTERN_WORLD, worldH / PATTERN_WORLD);
+    const PATTERN_WORLD = 10.0; // one bannai tile = 10 world units (4 diamonds/tile → ~2.5 wu/diamond — large geometry like refs)
+    // Clamp to at least 0.5 repeats so shallow faces don't show stretched blobs
+    t.repeat.set(Math.max(0.5, worldW / PATTERN_WORLD), Math.max(0.5, worldH / PATTERN_WORLD));
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshLambertMaterial({ map: t });
   }
@@ -82,13 +83,14 @@ export function pishtaq(w: number, h: number, d: number): THREE.Group {
   const g = new THREE.Group();
 
   // Main portal slab — front face: girih (spandrel zone); sides: bannai
-  const bannaiTex = bannai(C.sand, C.cobalt, C.turquoise);
+  // bannai: buff field, cream lattice lines (low contrast), cobalt motifs (~30% area)
+  const bannaiTex = bannai(C.sand, C.cream, C.cobalt);
   // Portal front: girih with 2 cells (bigger stars) — patternedBoxMulti sets repeat via PATTERN_WORLD
   g.add(patternedBoxMulti(w, h, d, C.sand, {
     pz: girih(C.sand, C.cobalt, C.turquoise, 2),  // 2-cell canvas → bigger stars
     px: bannaiTex,
     nx: bannaiTex,
-    nz: bannai(C.sandDark, C.sand, C.lapis),
+    nz: bannai(C.sand, C.cream, C.cobalt),
   }));
 
   // Recessed arch niche
@@ -160,11 +162,11 @@ export function dome(r: number, ribbed = false): THREE.Group {
 export function minaret(h: number): THREE.Group {
   const g = new THREE.Group();
 
-  // Shaft: bannai pattern in sand/cobalt — diagonal lattice ref
+  // Shaft: bannai pattern — buff field, cream lines, cobalt motifs
   // CylinderGeometry circumference ≈ 2π*r ≈ 0.5wu; height = h
-  // With PATTERN_WORLD=5 → repeat ~1 across circumference, ~h/5 vertically
-  const shaftTex = bannai(C.sand, C.cobalt, C.turquoise);
-  shaftTex.repeat.set(1, Math.round(h / 3.5));
+  const shaftTex = bannai(C.sand, C.cream, C.cobalt);
+  // Minaret is narrow — 1 repeat around circumference, scale vertically to match world-size
+  shaftTex.repeat.set(1, Math.max(1, Math.round(h / 10)));
   const shaftMat = new THREE.MeshLambertMaterial({ map: shaftTex });
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.055, h * 0.085, h, 14), shaftMat);
   shaft.position.y = h / 2;
@@ -187,14 +189,14 @@ export function arcadeWall(len: number, h: number, d: number): THREE.Group {
   const g = new THREE.Group();
 
   // Wall slab: bannai on all exterior faces; arch panels placed proud on +Z front
-  const bannaiTex = bannai(C.sand, C.cobalt, C.turquoise);
-  const bannaiBackTex = bannai(C.sand, C.cobalt, C.turquoise); // same vivid on outside
-  const bannaiInnerTex = bannai(C.sandLight, C.sandDark, C.sand); // very muted behind panels
+  // buff field, cream lattice lines (subtle), cobalt diamond motifs (~30% area)
+  const bannaiTex = bannai(C.sand, C.cream, C.cobalt);
+  const bannaiInnerTex = bannai(C.sand, C.cream, C.sandDark); // muted field behind panels
   g.add(patternedBoxMulti(len, h, d, C.sand, {
-    pz: bannaiInnerTex, // front wall behind panels — muted so blue panels pop
+    pz: bannaiInnerTex, // front wall behind panels — subtle so arch panels pop
     px: bannaiTex,
     nx: bannaiTex,
-    nz: bannaiBackTex,  // outside back — full contrast like sherdor-side-wall.jpg
+    nz: bannaiTex,  // outside back
   }));
 
   // Front face: two rows of framed arch panels (flat planes proud of wall)

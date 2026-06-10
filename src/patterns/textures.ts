@@ -32,9 +32,9 @@ export function bannai(bg: number, line: number, motif: number): THREE.CanvasTex
   const [cv, g] = canvas(S, S, bg);
 
   // Diamond cell size: one full diamond spans cellSize along each diagonal axis
-  // 256px → 4 diamonds per tile; combined with PATTERN_WORLD=5 → ~6 diamonds across a 7-unit face
+  // 256px → 4 diamonds per tile; with PATTERN_WORLD=2 → ~1 tile per 2 world units → diamond ≈ 2.5 wu
   const cellSize = 256;
-  const lineW = 15;     // px stroke width (~6% of cell)
+  const lineW = 10;     // px stroke width (~4% of cell) — subtle cream lines on buff
 
   // Draw diagonal grid lines: two families of lines at +45° and -45°
   g.strokeStyle = px(line);
@@ -63,11 +63,11 @@ export function bannai(bg: number, line: number, motif: number): THREE.CanvasTex
     g.stroke();
   }
 
-  // Now draw a small square-meander cross motif at each diamond centre
-  // Diamond centres are at half-cell offsets on both diagonals
+  // Diamond centre motif: a square rotated 45° (a smaller diamond) — covers ~25-30% of cell area
+  // This is the classic Timurid bannai motif: a diamond-in-diamond at each intersection
   const halfCell = cellSize / 2;
-  // Motif size: about 35% of cell width
-  const ms = Math.round(cellSize * 0.28);
+  // Motif diamond inscribed radius: ~20% of cell width keeps coverage ~30%
+  const ms = Math.round(cellSize * 0.20);
 
   g.fillStyle = px(motif);
 
@@ -78,29 +78,23 @@ export function bannai(bg: number, line: number, motif: number): THREE.CanvasTex
       const cy = (iy - ix) * halfCell;
       if (cx < -cellSize || cx > S + cellSize || cy < -cellSize || cy > S + cellSize) continue;
 
-      // Small square-meander cross: a plus (+) shape made of 3 rects
-      // Centre square
-      g.fillRect(cx - ms / 2, cy - ms / 2, ms, ms);
-      // Four arms (short)
-      const armW = Math.round(ms * 0.35);
-      const armL = Math.round(ms * 0.55);
-      // top arm
-      g.fillRect(cx - armW / 2, cy - ms / 2 - armL, armW, armL);
-      // bottom arm
-      g.fillRect(cx - armW / 2, cy + ms / 2, armW, armL);
-      // left arm
-      g.fillRect(cx - ms / 2 - armL, cy - armW / 2, armL, armW);
-      // right arm
-      g.fillRect(cx + ms / 2, cy - armW / 2, armL, armW);
+      // Draw a small filled diamond (rotated square) as the motif
+      g.beginPath();
+      g.moveTo(cx,      cy - ms);
+      g.lineTo(cx + ms, cy);
+      g.lineTo(cx,      cy + ms);
+      g.lineTo(cx - ms, cy);
+      g.closePath();
+      g.fill();
 
-      // Small corner accents (rotated squares)
-      const dotR = Math.round(ms * 0.14);
-      const dotOff = Math.round(ms * 0.55);
-      for (const [dx, dy] of [[-dotOff, -dotOff], [dotOff, -dotOff], [-dotOff, dotOff], [dotOff, dotOff]]) {
+      // Small accent squares at the four diagonal corners (inside the diamond cell)
+      const dotR = Math.round(ms * 0.30);
+      const dotOff = Math.round(cellSize * 0.36);
+      for (const [dx, dy] of [[dotOff, 0], [-dotOff, 0], [0, dotOff], [0, -dotOff]]) {
         g.save();
         g.translate(cx + dx, cy + dy);
         g.rotate(Math.PI / 4);
-        g.fillRect(-dotR, -dotR, dotR * 2, dotR * 2);
+        g.fillRect(-dotR / 2, -dotR / 2, dotR, dotR);
         g.restore();
       }
     }
@@ -307,14 +301,15 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
     g.fillRect(W - frameW * 0.25 - sq, y - sq / 2, sq, sq);
   }
 
-  // --- Inner field: bannai lattice ---
+  // --- Inner field: buff with subtle bannai lattice ---
   const padding = frameW + 8;
   const innerX = padding, innerY = padding;
   const innerW = W - padding * 2, innerH = H - padding * 2;
 
   // Draw diagonal lattice inside the panel (scaled to inner region)
-  const cellSize = Math.round(innerW * 0.22);
-  const lineW = Math.max(3, Math.round(cellSize * 0.07));
+  // Larger cells — about 4 diamonds across the inner field
+  const cellSize = Math.round(innerW * 0.28);
+  const lineW = Math.max(3, Math.round(cellSize * 0.06));
   const halfCell = cellSize / 2;
 
   // Clip to inner region
@@ -323,11 +318,11 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
   g.rect(innerX, innerY, innerW, innerH);
   g.clip();
 
-  // Fill with cobalt — blue field with cream lattice (matches ulughbeg-portal ref)
-  g.fillStyle = px(C_COBALT);
+  // Buff/sand field — warm stone background dominates
+  g.fillStyle = px(C_SAND);
   g.fillRect(innerX, innerY, innerW, innerH);
 
-  // Diagonal grid lines in cream
+  // Diagonal grid lines in cream (very subtle on buff field — low contrast)
   g.strokeStyle = px(C_CREAM);
   g.lineWidth = lineW;
   g.lineCap = 'square';
@@ -345,9 +340,9 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
     g.stroke();
   }
 
-  // Cross motifs at diamond centres (sand/gold on cobalt field)
-  g.fillStyle = px(C_GOLD);
-  const ms = Math.round(cellSize * 0.28);
+  // Diamond centre motifs in cobalt — covering ~30% of inner field area
+  g.fillStyle = px(C_COBALT);
+  const ms = Math.round(cellSize * 0.30);
   for (let iy = -2; iy < Math.ceil(innerH / halfCell) + 4; iy++) {
     for (let ix = -2; ix < Math.ceil(innerW / halfCell) + 4; ix++) {
       const cx = innerX + (ix + iy) * halfCell;
@@ -366,14 +361,15 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
 
   g.restore();
 
-  // --- Pointed arch outline inside the field ---
+  // --- Pointed arch outline inside the field (cobalt outer, turquoise inner) ---
   const archPad = padding + Math.round(innerW * 0.06);
   const archX = archPad, archY = padding;
   const archW = W - archPad * 2, archH = H - padding * 1.5;
   const archR = archW / 2;
 
-  g.strokeStyle = px(C_GOLD);
-  g.lineWidth = Math.max(4, lineW + 4);
+  const archLineW = Math.max(6, lineW + 6);
+  g.strokeStyle = px(C_COBALT);
+  g.lineWidth = archLineW;
   g.beginPath();
   g.moveTo(archX, archY + archH - archY);
   g.lineTo(archX, archY + archR);
@@ -382,18 +378,20 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
   g.lineTo(archX + archW, archY + archH - archY);
   g.stroke();
 
-  // Second inner arch (slightly smaller) for layered frame effect
+  // Second inner arch (slightly smaller) — turquoise fill accent
   const iap = archPad + Math.round(archW * 0.05);
   const iaW = W - iap * 2;
   const iaR = iaW / 2;
-  g.strokeStyle = px(C_CREAM);
-  g.lineWidth = Math.max(2, lineW - 2);
+  // Draw turquoise spandrel fill between outer arch and frame top
+  g.fillStyle = px(0x42c8c8); // C_TURQUOISE — spandrel accent
   g.beginPath();
-  g.moveTo(iap, archY + archH - archY);
-  g.lineTo(iap, archY + iaR);
-  g.quadraticCurveTo(iap, archY + iaR * 0.1, iap + iaR, archY);
-  g.quadraticCurveTo(iap + iaW, archY + iaR * 0.1, iap + iaW, archY + iaR);
-  g.lineTo(iap + iaW, archY + archH - archY);
+  g.moveTo(iap + 3, archY + archH - archY);
+  g.lineTo(iap + 3, archY + iaR + 4);
+  g.quadraticCurveTo(iap + 3, archY + iaR * 0.15, iap + iaR, archY + 3);
+  g.quadraticCurveTo(iap + iaW - 3, archY + iaR * 0.15, iap + iaW - 3, archY + iaR + 4);
+  g.lineTo(iap + iaW - 3, archY + archH - archY);
+  g.strokeStyle = px(0x42c8c8);
+  g.lineWidth = Math.max(3, lineW);
   g.stroke();
 
   const t = new THREE.CanvasTexture(cv);
@@ -409,7 +407,6 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
 const C_SAND = 0xecdfc4;
 const C_COBALT = 0x1e5fa8;
 const C_CREAM = 0xfff6e3;
-const C_GOLD = 0xd9b545;
 
 /** 8-pointed girih star lattice: proper 8-pointed star polygon with inner/outer radii. */
 export function girih(bg: number, star: number, accent: number, cells = 4): THREE.CanvasTexture {
