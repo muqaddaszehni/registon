@@ -10,6 +10,7 @@ import { makeGround } from './scene/ground';
 import { Orbit } from './scene/orbit';
 import { ZoomController } from './scene/zoom';
 import { PanController } from './scene/pan';
+import { lodManager } from './scene/lod';
 import { makeComposer } from './scene/post';
 import { cornerButton } from './ui/buttons';
 import { ulughBeg } from './buildings/ulughbeg';
@@ -59,6 +60,7 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   for (const t of tickers) t(dt);
+  lodManager.tick(); // process one canvas from stagger queue per frame
   composer.render();
 });
 
@@ -68,6 +70,20 @@ const panCtrl = new PanController();
 
 const orbit = new Orbit(camera, zoomCtrl);
 onTick(dt => orbit.tick(dt));
+
+// Capability gate: disable 2x LOD on low-end devices
+const canUpscale = renderer.capabilities.maxTextureSize >= 4096
+  && devicePixelRatio * Math.min(screen.width, screen.height) > 800;
+if (!canUpscale) {
+  lodManager.disable();
+  console.log('[LOD] 2x disabled: low-end device or small screen');
+}
+
+// Wire tier-change: when zoom crosses LOD_THRESHOLD, trigger re-rasterization
+zoomCtrl.onTierChange(tier => {
+  console.log(`[LOD] tier change → ${tier}x`);
+  lodManager.onTierChange(tier);
+});
 
 // Rotation button (slot 0)
 cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
