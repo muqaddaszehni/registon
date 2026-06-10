@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseLayout } from './grid';
-import { findPath } from '../character/astar';
+import { parseLayout } from '../src/world/grid';
+import { findPath } from '../src/character/astar';
 
 const g = parseLayout([
   '#####',
