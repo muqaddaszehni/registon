@@ -35,15 +35,17 @@ export function addTrees(scene: THREE.Scene): (dt: number) => void {
   scene.add(pts);
 
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rawPos = pos; // direct Float32Array access
   let t = 0;
   return (dt: number) => {
     if (reduced) return;
     t += dt;
     const a = geo.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < N; i++) {
-      a.setX(i, a.getX(i) + Math.sin(t + seed[i]) * dt * 0.4 + dt * 0.15);
-      a.setY(i, 1.2 + Math.sin(t * 0.7 + seed[i]) * 0.8);
-      if (a.getX(i) > 10) a.setX(i, -10);
+      const base = i * 3;
+      rawPos[base] += Math.sin(t + seed[i]) * dt * 0.4 + dt * 0.15;
+      rawPos[base + 1] = 1.2 + Math.sin(t * 0.7 + seed[i]) * 0.8;
+      if (rawPos[base] > 10) rawPos[base] = -10;
     }
     a.needsUpdate = true;
   };

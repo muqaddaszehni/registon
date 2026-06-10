@@ -13,6 +13,9 @@ const css = `
 @media (orientation: portrait) {
   #ui .card { bottom: 0; border-radius: 14px 14px 0 0; width: 100vw; }
 }
+@media (prefers-reduced-motion: reduce) {
+  #ui .card { transition: none; }
+}
 .langtoggle { position: absolute; left: 16px; bottom: 16px; border: none; cursor: pointer;
   background: #123a66; color: #fff3da; border-radius: 22px; padding: 10px 18px; font-size: 14px; }
 `;
