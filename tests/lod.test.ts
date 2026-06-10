@@ -10,6 +10,7 @@ vi.mock('three', () => {
       const c = new MockCanvasTexture(this.image);
       return c;
     }
+    dispose() { /* no-op in tests */ }
   }
   return { CanvasTexture: MockCanvasTexture };
 });
@@ -56,8 +57,8 @@ describe('TextureRegistry', () => {
     const cv1 = makeCanvas(512, 512);
     const cv2 = makeCanvas(512, 512);
     const draw = vi.fn();
-    reg.register(cv1, draw, 512, 512, [{ needsUpdate: false, image: cv1 } as any], true);
-    reg.register(cv2, draw, 512, 512, [{ needsUpdate: false, image: cv2 } as any], false);
+    reg.register(cv1, draw, 512, 512, [{ needsUpdate: false, image: cv1, dispose: vi.fn() } as any], true);
+    reg.register(cv2, draw, 512, 512, [{ needsUpdate: false, image: cv2, dispose: vi.fn() } as any], false);
     const queue = reg.buildQueue(2);
     // Priority entries come first
     expect(queue[0].priority).toBe(true);
@@ -67,8 +68,8 @@ describe('TextureRegistry', () => {
     const ctx = { fillStyle: '', fillRect: vi.fn() };
     const cv = { width: 512, height: 512, getContext: () => ctx } as unknown as HTMLCanvasElement;
     const draw = vi.fn();
-    const tex1 = { needsUpdate: false, image: cv } as any;
-    const tex2 = { needsUpdate: false, image: cv } as any;
+    const tex1 = { needsUpdate: false, image: cv, dispose: vi.fn() } as any;
+    const tex2 = { needsUpdate: false, image: cv, dispose: vi.fn() } as any;
     reg.register(cv, draw, 512, 512, [tex1, tex2]);
 
     reg.applyScale(reg.entries[0], 2);
@@ -108,7 +109,7 @@ describe('Stagger queue', () => {
       const ctx = { fillStyle: '', fillRect: vi.fn() };
       const cv = { width: 512, height: 512, getContext: () => ctx } as unknown as HTMLCanvasElement;
       const draw = vi.fn();
-      const tex = { needsUpdate: false, image: cv } as any;
+      const tex = { needsUpdate: false, image: cv, dispose: vi.fn() } as any;
       reg.register(cv, draw, 512, 512, [tex], priority);
       return { draw, tex };
     };
@@ -135,7 +136,7 @@ describe('Stagger queue', () => {
     const ctx = { fillStyle: '', fillRect: vi.fn() };
     const cv = { width: 512, height: 512, getContext: () => ctx } as unknown as HTMLCanvasElement;
     const draw = vi.fn();
-    const tex = { needsUpdate: false, image: cv } as any;
+    const tex = { needsUpdate: false, image: cv, dispose: vi.fn() } as any;
     reg.register(cv, draw, 512, 512, [tex], false); // not priority
 
     const queue = reg.buildQueue(2); // tier 2 but not priority

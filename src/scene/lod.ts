@@ -50,7 +50,13 @@ export class TextureRegistry {
     ];
   }
 
-  /** Resize canvas and redraw at scale, then flag all textures for GPU upload. */
+  /** Resize canvas and redraw at scale, then force full GPU re-upload.
+   *
+   * When canvas dimensions change, Three.js would try glTexSubImage2D which
+   * errors if the new size is larger than the existing GPU allocation.
+   * Calling dispose() first removes the GPU texture so the next render
+   * triggers glTexImage2D (full re-allocation) instead.
+   */
   applyScale(entry: LodEntry, scale: 1 | 2): void {
     const newW = entry.baseW * scale;
     const newH = entry.baseH * scale;
@@ -58,7 +64,11 @@ export class TextureRegistry {
     entry.canvas.height = newH;
     const ctx = entry.canvas.getContext('2d')!;
     entry.draw(ctx, newW, newH);
-    for (const tex of entry.textures) tex.needsUpdate = true;
+    for (const tex of entry.textures) {
+      // dispose() removes the GPU allocation; needsUpdate then forces full re-upload
+      tex.dispose();
+      tex.needsUpdate = true;
+    }
   }
 }
 
