@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { girih, bannai, meander, calligraphyBand, archPanel } from '../patterns/textures';
+import { girih, bannai, calligraphyBand, archPanel, tigerSpandrel } from '../patterns/textures';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 const matMap = (map: THREE.Texture) => new THREE.MeshLambertMaterial({ map });
@@ -78,45 +78,184 @@ export function archNiche(w: number, h: number, depth: number, color: number): T
   return m; // caller positions; extrudes toward +Z
 }
 
-/** Monumental portal: patterned frame + recessed dark arch, calligraphy band + bannai flanks. */
-export function pishtaq(w: number, h: number, d: number): THREE.Group {
+/** Arch trim ring shape: outer arch outline minus inner arch (annular frame for extruding). */
+function archTrimShape(w: number, h: number, trimW: number): THREE.Shape {
+  const outer = archShape(w, h);
+  // Inner cutout — slightly smaller arch
+  const iw = w - trimW * 2;
+  const ih = h - trimW * 1.2;
+  const ir = iw / 2;
+  const inner = new THREE.Path();
+  inner.moveTo(-ir, 0);
+  inner.lineTo(-ir, ih - ir);
+  inner.quadraticCurveTo(-ir, ih - ir * 0.1, 0, ih);
+  inner.quadraticCurveTo(ir, ih - ir * 0.1, ir, ih - ir);
+  inner.lineTo(ir, 0);
+  inner.closePath();
+  outer.holes.push(inner);
+  return outer;
+}
+
+/**
+ * Monumental portal with anatomically-correct parts:
+ *   - Two flanking PYLON boxes (bannai-patterned)
+ *   - LINTEL box bridging top (girih front + calligraphy band)
+ *   - IWAN: floor + back wall (girih dark) + two side walls + deep-shadow arch face
+ *   - ARCH TRIM: cream/gold extruded annular ring following pointed arch edge
+ *   - SPANDREL panels: 'tigers' → twin mirrored tigerSpandrel planes; else girih
+ *   - CALLIGRAPHY BAND: proud plane at very top of lintel
+ *
+ * opts.decals = 'tigers' → Sher-Dor twin mirrored tiger spandrels
+ */
+export function pishtaq(
+  w: number, h: number, d: number,
+  opts: { decals?: 'tigers' } = {},
+): THREE.Group {
   const g = new THREE.Group();
 
-  // Main portal slab — front face: girih (spandrel zone); sides: bannai
-  // bannai: buff field, cream lattice lines (low contrast), cobalt motifs (~30% area)
+  // Proportions
+  const pylonW    = w * 0.13;        // border frame width (≈12% each side)
+  const iwanW     = w - pylonW * 2;  // clear arch opening width
+  const iwanH     = h * 0.78;        // height of arch opening
+  const iwanDepth = Math.min(d * 0.85, 4.5); // recess depth (inward, away from plaza)
+
+  const frontZ = d / 2;              // portal front face z (local)
+  const backZ  = frontZ - iwanDepth; // iwan back wall z (local)
+
   const bannaiTex = bannai(C.sand, C.cream, C.cobalt);
-  // Portal front: girih with 2 cells (bigger stars) — patternedBoxMulti sets repeat via PATTERN_WORLD
-  g.add(patternedBoxMulti(w, h, d, C.sand, {
-    pz: girih(C.sand, C.cobalt, C.turquoise, 2),  // 2-cell canvas → bigger stars
-    px: bannaiTex,
-    nx: bannaiTex,
-    nz: bannai(C.sand, C.cream, C.cobalt),
-  }));
 
-  // Recessed arch niche
-  const niche = archNiche(w * 0.52, h * 0.72, d * 0.4, C.lapis);
-  niche.position.set(0, 0, d / 2 - d * 0.4 + 0.02);
-  g.add(niche);
-
-  // Meander panels flanking the arch (left and right, proud of wall face)
-  const flankW = (w - w * 0.52) / 2 * 0.88;
-  const flankH = h * 0.68;
-  const meanderTex = meander(C.cobalt, C.cream);
-  for (const sx of [-1, 1]) {
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(flankW, flankH),
-      new THREE.MeshLambertMaterial({ map: meanderTex }),
-    );
-    panel.position.set(sx * (w * 0.52 / 2 + flankW / 2 + 0.01), flankH / 2 + h * 0.02, d / 2 + 0.02);
-    g.add(panel);
+  // ── LEFT & RIGHT PYLONS ─────────────────────────────────────────
+  for (const sx of [-1, 1] as const) {
+    const pylon = patternedBoxMulti(pylonW, h, d, C.sand, {
+      pz: bannai(C.sand, C.cream, C.cobalt),
+      nz: bannaiTex,
+      px: bannaiTex,
+      nx: bannaiTex,
+    });
+    pylon.position.x = sx * (iwanW / 2 + pylonW / 2);
+    // patternedBoxMulti auto-sets y = h/2 internally
+    g.add(pylon);
   }
 
-  // Calligraphy band across the top (replaces kufic strip)
-  const bandH = h * 0.11;
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.92, bandH),
-    new THREE.MeshLambertMaterial({ map: calligraphyBand(C.lapis, C.cream) }));
-  strip.position.set(0, h - bandH / 2 - h * 0.02, d / 2 + 0.02);
-  g.add(strip);
+  // ── LINTEL ──────────────────────────────────────────────────────
+  const lintelH = h - iwanH;
+  const lintel = patternedBoxMulti(iwanW, lintelH, d, C.sand, {
+    pz: girih(C.sand, C.cobalt, C.turquoise, 2),
+    nz: bannaiTex,
+    px: bannaiTex,
+    nx: bannaiTex,
+  });
+  lintel.position.set(0, iwanH + lintelH / 2, 0);
+  g.add(lintel);
+
+  // ── IWAN FLOOR ──────────────────────────────────────────────────
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(iwanW, 0.12, iwanDepth),
+    mat(C.sandDark),
+  );
+  floor.position.set(0, 0.06, frontZ - iwanDepth / 2);
+  g.add(floor);
+
+  // ── IWAN SIDE WALLS ─────────────────────────────────────────────
+  for (const sx of [-1, 1] as const) {
+    const sw = new THREE.Mesh(
+      new THREE.BoxGeometry(0.14, iwanH, iwanDepth),
+      new THREE.MeshLambertMaterial({ color: 0x4a6898 }),  // shadowed blue
+    );
+    sw.position.set(sx * (iwanW / 2 - 0.07), iwanH / 2, frontZ - iwanDepth / 2);
+    g.add(sw);
+  }
+
+  // ── IWAN BACK WALL ──────────────────────────────────────────────
+  const backWall = new THREE.Mesh(
+    new THREE.BoxGeometry(iwanW, iwanH, 0.14),
+    new THREE.MeshLambertMaterial({
+      map: (() => { const t = girih(C.lapis, C.cobalt, C.turquoise, 2); t.repeat.set(0.5, 0.5); return t; })(),
+      color: 0x3a587e,
+    }),
+  );
+  backWall.position.set(0, iwanH / 2, backZ + 0.07);
+  g.add(backWall);
+
+  // Small door on back wall
+  const doorW = iwanW * 0.30, doorH = iwanH * 0.35;
+  const door = new THREE.Mesh(
+    new THREE.PlaneGeometry(doorW, doorH),
+    mat(0x0f1f35),
+  );
+  door.position.set(0, doorH / 2 + 0.01, backZ + 0.22);
+  g.add(door);
+
+  // ── ARCH FACE (deep shadow at front of iwan) ────────────────────
+  const archFace = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(archShape(iwanW, iwanH), { depth: 0.22, bevelEnabled: false }),
+    new THREE.MeshLambertMaterial({
+      color: 0x050e1e,
+      emissive: new THREE.Color(0x000208),
+      emissiveIntensity: 0.8,
+    }),
+  );
+  archFace.position.set(-iwanW / 2, 0, frontZ - 0.22);
+  g.add(archFace);
+
+  // ── ARCH TRIM (cream/gold extruded annular ring) ─────────────────
+  const trimW = Math.max(0.18, pylonW * 0.22);
+  const trim = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(archTrimShape(iwanW, iwanH, trimW), { depth: 0.24, bevelEnabled: false }),
+    new THREE.MeshLambertMaterial({
+      color: C.cream,
+      emissive: new THREE.Color(C.gold),
+      emissiveIntensity: 0.06,
+    }),
+  );
+  trim.position.set(-iwanW / 2, 0, frontZ - 0.01);
+  g.add(trim);
+
+  // ── SPANDREL PANELS ─────────────────────────────────────────────
+  // Zone above arch opening, flanking the pointed crown
+  const spandrelBaseY = iwanH * 0.80;
+  const spandrelH2    = (h - spandrelBaseY) * 0.70;
+  const spandrelW2    = iwanW * 0.42;
+
+  if (opts.decals === 'tigers') {
+    const tex = tigerSpandrel();
+    for (const sx of [-1, 1] as const) {
+      const panel = new THREE.Mesh(
+        new THREE.PlaneGeometry(spandrelW2, spandrelH2),
+        new THREE.MeshLambertMaterial({ map: tex }),
+      );
+      if (sx === 1) panel.scale.x = -1;  // mirror right tiger
+      panel.position.set(
+        sx * (spandrelW2 / 2 + 0.04),
+        spandrelBaseY + spandrelH2 / 2,
+        frontZ + 0.04,
+      );
+      g.add(panel);
+    }
+  } else {
+    const spTex = girih(C.sand, C.cobalt, C.turquoise, 1);
+    for (const sx of [-1, 1] as const) {
+      const panel = new THREE.Mesh(
+        new THREE.PlaneGeometry(spandrelW2, spandrelH2),
+        new THREE.MeshLambertMaterial({ map: spTex }),
+      );
+      panel.position.set(
+        sx * (spandrelW2 / 2 + 0.04),
+        spandrelBaseY + spandrelH2 / 2,
+        frontZ + 0.03,
+      );
+      g.add(panel);
+    }
+  }
+
+  // ── CALLIGRAPHY BAND ─────────────────────────────────────────────
+  const bandH = h * 0.085;
+  const band = new THREE.Mesh(
+    new THREE.PlaneGeometry(w * 0.94, bandH),
+    new THREE.MeshLambertMaterial({ map: calligraphyBand(C.lapis, C.cream) }),
+  );
+  band.position.set(0, h - bandH / 2 - h * 0.01, frontZ + 0.03);
+  g.add(band);
 
   return g;
 }
