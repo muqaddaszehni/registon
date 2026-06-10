@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { C } from '../palette';
 import { girih, bannai, meander, calligraphyBand, archPanel, tigerSpandrel, pylonFace } from '../patterns/textures';
+import { textureRegistry } from '../scene/lod';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 const matMap = (map: THREE.Texture) => new THREE.MeshLambertMaterial({ map });
@@ -38,14 +39,20 @@ export function patternedBoxMulti(
   facesMap: Partial<Record<'px' | 'nx' | 'py' | 'ny' | 'pz' | 'nz', THREE.Texture>>,
 ): THREE.Mesh {
   const plain = mat(color);
-  // Helper: clone texture with correct repeat for this face's world dimensions
+  // Helper: clone texture with correct repeat for this face's world dimensions.
+  // Clones share the source canvas (.image reference is the same HTMLCanvasElement).
+  // Register each clone with the registry so needsUpdate is set on tier changes.
   function faceTexRepeat(tex: THREE.Texture, worldW: number, worldH: number): THREE.Material {
-    const t = tex.clone();
+    const t = tex.clone() as THREE.CanvasTexture;
     t.needsUpdate = true;
     const PATTERN_WORLD = 10.0; // one bannai tile = 10 world units (4 diamonds/tile → ~2.5 wu/diamond — large geometry like refs)
     // Clamp to at least 0.5 repeats so shallow faces don't show stretched blobs
     t.repeat.set(Math.max(0.5, worldW / PATTERN_WORLD), Math.max(0.5, worldH / PATTERN_WORLD));
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    // Register clone so it gets needsUpdate=true on tier changes (clone shares source canvas)
+    if (tex instanceof THREE.CanvasTexture && tex.image instanceof HTMLCanvasElement) {
+      textureRegistry.addTexture(tex.image, t);
+    }
     return new THREE.MeshLambertMaterial({ map: t });
   }
   const faceOrder: Array<'px' | 'nx' | 'py' | 'ny' | 'pz' | 'nz'> = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
