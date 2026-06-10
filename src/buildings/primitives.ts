@@ -297,29 +297,63 @@ export function dome(r: number, ribbed = false): THREE.Group {
   return g;
 }
 
-/** Tapered minaret with diagonal-lattice shaft (bannai colorway) and calligraphy drum. */
+/** Tapered minaret with bannai shaft, corbel cornice rings, gallery, and buff dome cap. */
 export function minaret(h: number): THREE.Group {
   const g = new THREE.Group();
 
-  // Shaft: bannai pattern — buff field, cream lines, cobalt motifs
-  // CylinderGeometry circumference ≈ 2π*r ≈ 0.5wu; height = h
+  // ── SHAFT (tapered, bannai pattern) ──────────────────────────────
   const shaftTex = bannai(C.sand, C.cream, C.cobalt);
-  // Minaret is narrow — 1 repeat around circumference, scale vertically to match world-size
-  shaftTex.repeat.set(1, Math.max(1, Math.round(h / 10)));
+  shaftTex.repeat.set(1, Math.max(1, Math.round(h / 8)));
   const shaftMat = new THREE.MeshLambertMaterial({ map: shaftTex });
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.055, h * 0.085, h, 14), shaftMat);
-  shaft.position.y = h / 2;
+  const rBase = h * 0.095;  // slightly fatter base (real ones are stout)
+  const rTop  = h * 0.058;  // top of shaft just below cornice
+  const shaftH = h * 0.88;
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBase, shaftH, 16), shaftMat);
+  shaft.position.y = shaftH / 2;
   g.add(shaft);
 
-  // Cornice
-  const cornice = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.085, h * 0.06, h * 0.05, 14), mat(C.cream));
-  cornice.position.y = h * 0.97;
-  g.add(cornice);
+  // ── CORBEL CORNICE (3 stacking rings, widening outward) ──────────
+  const corniceBase = shaftH;
+  const ringData: [number, number, number][] = [
+    // [yOffset from corniceBase, radius, ringHeight]
+    [0.000, rTop * 1.10, h * 0.018],
+    [0.024, rTop * 1.22, h * 0.022],
+    [0.052, rTop * 1.38, h * 0.026],
+  ];
+  for (const [yOff, r, rh] of ringData) {
+    const ring = new THREE.Mesh(
+      new THREE.CylinderGeometry(r, r * 0.96, rh, 16),
+      mat(C.cream),
+    );
+    ring.position.y = corniceBase + yOff * h + rh / 2;
+    g.add(ring);
+  }
 
-  // Cap
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(h * 0.06, 12, 10), mat(C.turquoise));
-  cap.position.y = h * 1.03;
+  // ── GALLERY (short cylinder with arch-panel band) ─────────────────
+  const [lastYOff, , lastRH] = ringData[2];
+  const galleryBase = corniceBase + lastYOff * h + lastRH;
+  const galleryR    = rTop * 1.32;
+  const galleryH    = h * 0.065;
+  const galleryTex  = archPanel(256, 128);
+  const gallery = new THREE.Mesh(
+    new THREE.CylinderGeometry(galleryR, galleryR, galleryH, 16),
+    new THREE.MeshLambertMaterial({ map: galleryTex }),
+  );
+  gallery.position.y = galleryBase + galleryH / 2;
+  g.add(gallery);
+
+  // ── DOME CAP (buff/sand sphere — NOT turquoise, refs show buff caps) ─
+  const capBase = galleryBase + galleryH;
+  const capR    = galleryR * 0.80;
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(capR, 12, 10), mat(C.sand));
+  cap.position.y = capBase + capR * 0.85;
   g.add(cap);
+
+  // ── FINIAL ────────────────────────────────────────────────────────
+  const finial = new THREE.Mesh(new THREE.SphereGeometry(capR * 0.22, 8, 8), mat(C.gold));
+  finial.position.y = capBase + capR * 1.75;
+  g.add(finial);
+
   return g;
 }
 
