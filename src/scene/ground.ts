@@ -9,7 +9,7 @@ export function makeGround(): THREE.Mesh {
   const g = cv.getContext('2d')!;
   g.fillStyle = '#' + C.plaza.toString(16).padStart(6, '0');
   g.fillRect(0, 0, cv.width, cv.height);
-  g.strokeStyle = '#c9a06a';
+  g.strokeStyle = '#' + C.plazaPath.toString(16).padStart(6, '0');
   g.lineWidth = 1;
   for (let x = 0; x <= cols; x++) { g.beginPath(); g.moveTo(x * 16, 0); g.lineTo(x * 16, cv.height); g.stroke(); }
   for (let y = 0; y <= rows; y++) { g.beginPath(); g.moveTo(0, y * 16); g.lineTo(cv.width, y * 16); g.stroke(); }

@@ -1,3 +1,4 @@
+// NOTE: rows may be ragged (27 vs 28 chars); parseLayout treats missing trailing chars as blocked ('#') — see grid.ts undefined guard.
 export const LAYOUT = [
   '############################',
   '############################',
