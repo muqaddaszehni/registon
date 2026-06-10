@@ -5,6 +5,9 @@ import { addSunsetLights } from './scene/lights';
 import { makeGround } from './scene/ground';
 import { Orbit } from './scene/orbit';
 import { cornerButton } from './ui/buttons';
+// TEMP gallery — remove in Task 8
+import { girih, band, kufic, tigerDecal } from './patterns/textures';
+import { C } from './palette';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -36,5 +39,13 @@ renderer.setAnimationLoop(() => {
 const orbit = new Orbit(camera);
 onTick(dt => orbit.tick(dt));
 cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
+
+// TEMP gallery — remove in Task 8
+[girih(C.cobalt, C.turquoise, C.cream), band(C.lapis, C.turquoise), kufic(C.cream, C.lapis), tigerDecal()]
+  .forEach((tex, i) => {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ map: tex }));
+    p.position.set(-12 + i * 7, 4, 0);
+    scene.add(p);
+  });
 
 export { scene, camera, renderer };
