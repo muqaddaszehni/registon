@@ -18,6 +18,15 @@ function blendHex(a: number, b: number, t: number): string {
 // Darken a hex colour by factor (0=same, 1=black)
 function darken(n: number, f: number): string { return blendHex(n, 0x000000, f); }
 
+// Lighten a hex colour toward white by factor (0=same, 1=white), returns number
+function lightenNum(n: number, f: number): number {
+  const ar = (n >> 16) & 0xff, ag = (n >> 8) & 0xff, ab = n & 0xff;
+  const r = Math.round(ar + (0xff - ar) * f);
+  const gg = Math.round(ag + (0xff - ag) * f);
+  const bl = Math.round(ab + (0xff - ab) * f);
+  return (r << 16) | (gg << 8) | bl;
+}
+
 export function makeGround(): THREE.Mesh {
   const cols = LAYOUT[0].length, rows = LAYOUT.length;
   const tileSize = 48; // px per tile — higher res for crisp detail
@@ -28,12 +37,16 @@ export function makeGround(): THREE.Mesh {
   const g = cv.getContext('2d')!;
 
   // ── 1. Base fill: pale warm stone under everything ──────────────────────
-  g.fillStyle = hex(C.plaza);
+  // Lifted toward white to compensate for MeshLambertMaterial lighting attenuation.
+  // The sunset light at low altitude only hits the floor at ~36% incidence,
+  // so the canvas base must be near-white-cream to read as pale warm stone after shading.
+  const plazaNum = lightenNum(C.plaza, 0.28); // ~0xf3ecdf — pale warm cream
+  g.fillStyle = hex(plazaNum);
   g.fillRect(0, 0, W, H);
 
   // ── 2. Darken building-footprint regions (blocked tiles) ────────────────
-  // Slightly cooler/darker so bright plaza doesn't bleed under buildings
-  const blockedFill = darken(C.plazaPath, 0.18);
+  // 5-7% darker than base — barely-there warm separation (not green)
+  const blockedFill = darken(plazaNum, 0.07);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const ch = (LAYOUT[r]?.[c]) ?? '#';
@@ -45,11 +58,11 @@ export function makeGround(): THREE.Mesh {
   }
 
   // ── 3. Large panel grid (4x4 tile groups, ~192px panels) ────────────────
-  // Seam colour: slightly darker than plaza, 2px wide
+  // Seam colour: thin warm-grey, low contrast against lifted base
   const panelSize = 4 * tileSize; // 192px
-  const seamColor = darken(C.plaza, 0.18);
+  const seamColor = darken(plazaNum, 0.12);
   g.strokeStyle = seamColor;
-  g.lineWidth = 2.5;
+  g.lineWidth = 1.5;
   for (let x = 0; x <= W; x += panelSize) {
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
   }
@@ -58,8 +71,8 @@ export function makeGround(): THREE.Mesh {
   }
 
   // Fine tile lines within panels (slightly visible)
-  g.strokeStyle = darken(C.plaza, 0.09);
-  g.lineWidth = 0.8;
+  g.strokeStyle = darken(plazaNum, 0.06);
+  g.lineWidth = 0.6;
   for (let x = 0; x <= W; x += tileSize) {
     if (x % panelSize === 0) continue; // skip panel seams (already drawn thicker)
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
@@ -73,7 +86,7 @@ export function makeGround(): THREE.Mesh {
   // Vertical: cols 13-15 → px 624–768 (3 tiles wide = 144px)
   // Horizontal: rows 9-11 → px 432–576 (3 rows = 144px)
   const walkwayColor = hex(C.sandLight); // lighter warm stone
-  const walkAlpha = 0.30; // subtle walkway highlight
+  const walkAlpha = 0.18; // very subtle warm-lighter highlight, not green-grey
   g.save();
   g.globalAlpha = walkAlpha;
   g.fillStyle = walkwayColor;
@@ -95,8 +108,8 @@ export function makeGround(): THREE.Mesh {
     [18, 11], // center-right
   ];
 
-  const medalAlpha = 0.26; // subtle but visible — floor art, not targets
-  const medalColor = darken(C.plazaPath, 0.12);
+  const medalAlpha = 0.15; // faint floor art — warm but not darkening
+  const medalColor = darken(plazaNum, 0.14);
 
   for (const [mc, mr] of medalPositions) {
     const cx = (mc + 0.5) * tileSize;
@@ -116,7 +129,7 @@ export function makeGround(): THREE.Mesh {
     new THREE.MeshLambertMaterial({ map: tex }),
   );
   mesh.position.y = -0.5; // top surface at y=0
-  mesh.receiveShadow = true;
+  mesh.receiveShadow = false; // no shadow-cast darkening — floor must read pale
   mesh.name = 'ground';
   return mesh;
 }
