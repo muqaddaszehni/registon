@@ -1,6 +1,8 @@
 export const C = {
   // Stone
   sand: 0xecdfc4, sandLight: 0xf5ecda, sandDark: 0xd4c4a0,
+  // Marble (pale grey-cream for plinths and steps — warm not stark white)
+  marble: 0xe8e3d6,
   // Plaza
   plaza: 0xeee4d5, plazaPath: 0xd8cebb,
   // Blues

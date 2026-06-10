@@ -155,6 +155,8 @@ export function pishtaq(
     new THREE.MeshLambertMaterial({
       map: (() => { const t = girih(C.lapis, C.cobalt, C.turquoise, 2); t.repeat.set(0.5, 0.5); return t; })(),
       color: 0x3a587e,
+      emissive: new THREE.Color(0x16396e),
+      emissiveIntensity: 0.25,
     }),
   );
   backWall.position.set(0, iwanH / 2, backZ + 0.07);
@@ -200,12 +202,13 @@ export function pishtaq(
 
   // Dark inner arch — front face at frontZ + 0.06 (6cm in front of cream)
   // This ensures dark arch cleanly occludes the cream interior
+  // Slight lapis emissive so arch reads as deep shadow with blue detail hint, not void.
   const archFace = new THREE.Mesh(
     new THREE.ExtrudeGeometry(archShape(iwanW, iwanH), { depth: 0.28, bevelEnabled: false }),
     new THREE.MeshLambertMaterial({
       color: 0x050e1e,
-      emissive: new THREE.Color(0x000208),
-      emissiveIntensity: 0.8,
+      emissive: new THREE.Color(0x16396e),
+      emissiveIntensity: 0.18,
     }),
   );
   archFace.position.set(0, 0, frontZ - 0.22);
@@ -303,10 +306,10 @@ export function dome(r: number, ribbed = false): THREE.Group {
 
   const CTRL: [number, number][] = [
     [0.00, drumR],        // base: smooth join to collar
-    [0.20, r * 0.98],    // slight flare from collar
-    [0.38, r * 1.05],    // widest belly
-    [0.58, r * 0.88],    // shoulder starts narrowing
-    [0.78, r * 0.45],    // slim upper neck
+    [0.15, r * 0.92],    // rise from collar — slightly narrower than drum
+    [0.32, r * 1.06],    // widest belly — modest swell (was 1.05, stays close to 1.0r)
+    [0.50, r * 0.72],    // shoulder narrows sharply — key onion pinch zone
+    [0.68, r * 0.30],    // slim neck — tight like true Central Asian onion
     [1.00, 0.0],          // apex point
   ];
 
