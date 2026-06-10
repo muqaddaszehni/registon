@@ -6,6 +6,7 @@ import { makeGround } from './scene/ground';
 import { Orbit } from './scene/orbit';
 import { cornerButton } from './ui/buttons';
 import { ulughBeg } from './buildings/ulughbeg';
+import { sherDor } from './buildings/sherdor';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -39,5 +40,6 @@ onTick(dt => orbit.tick(dt));
 cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
 
 scene.add(ulughBeg());
+scene.add(sherDor());
 
 export { scene, camera, renderer };
