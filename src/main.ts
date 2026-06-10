@@ -1,3 +1,7 @@
+import { webglAvailable, showFallback } from './fallback';
+import { addAudioToggle } from './audio';
+if (!webglAvailable()) { showFallback(); throw new Error('no webgl'); }
+
 import * as THREE from 'three';
 import { makeSky } from './scene/sky';
 import { makeCamera, sizeCamera } from './scene/camera';
@@ -47,6 +51,7 @@ renderer.setAnimationLoop(() => {
 const orbit = new Orbit(camera);
 onTick(dt => orbit.tick(dt));
 cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
+addAudioToggle();
 
 scene.add(ulughBeg());
 scene.add(sherDor());
