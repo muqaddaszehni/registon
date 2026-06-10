@@ -7,6 +7,7 @@ import { Orbit } from './scene/orbit';
 import { cornerButton } from './ui/buttons';
 import { ulughBeg } from './buildings/ulughbeg';
 import { sherDor } from './buildings/sherdor';
+import { tilyaKori } from './buildings/tilyakori';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -41,5 +42,6 @@ cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
 
 scene.add(ulughBeg());
 scene.add(sherDor());
+scene.add(tilyaKori());
 
 export { scene, camera, renderer };
