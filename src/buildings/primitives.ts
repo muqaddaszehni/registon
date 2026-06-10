@@ -78,23 +78,6 @@ export function archNiche(w: number, h: number, depth: number, color: number): T
   return m; // caller positions; extrudes toward +Z
 }
 
-/** Arch trim ring shape: outer arch outline minus inner arch (annular frame for extruding). */
-function archTrimShape(w: number, h: number, trimW: number): THREE.Shape {
-  const outer = archShape(w, h);
-  // Inner cutout — slightly smaller arch
-  const iw = w - trimW * 2;
-  const ih = h - trimW * 1.2;
-  const ir = iw / 2;
-  const inner = new THREE.Path();
-  inner.moveTo(-ir, 0);
-  inner.lineTo(-ir, ih - ir);
-  inner.quadraticCurveTo(-ir, ih - ir * 0.1, 0, ih);
-  inner.quadraticCurveTo(ir, ih - ir * 0.1, ir, ih - ir);
-  inner.lineTo(ir, 0);
-  inner.closePath();
-  outer.holes.push(inner);
-  return outer;
-}
 
 /**
  * Monumental portal with anatomically-correct parts:
@@ -114,7 +97,7 @@ export function pishtaq(
   const g = new THREE.Group();
 
   // Proportions
-  const pylonW    = w * 0.13;        // border frame width (≈12% each side)
+  const pylonW    = w * 0.20;        // border frame width (~20% each side — matches real proportions)
   const iwanW     = w - pylonW * 2;  // clear arch opening width
   const iwanH     = h * 0.78;        // height of arch opening
   const iwanDepth = Math.min(d * 0.85, 4.5); // recess depth (inward, away from plaza)
@@ -186,47 +169,54 @@ export function pishtaq(
   door.position.set(0, doorH / 2 + 0.01, backZ + 0.22);
   g.add(door);
 
-  // ── ARCH FACE (deep shadow at front of iwan) ────────────────────
+  // ── ARCH TRIM + FACE (two-layer technique) ─────────────────────
+  // Layer 1: CREAM outer arch (slightly wider/taller) — forms the visible trim band
+  // Layer 2: DARK inner arch (exact iwan size, protrudes slightly MORE forward)
+  // Cream ring is visible around the dark arch edges.
+  const trimW = Math.max(0.32, iwanW * 0.06);
+  const archOuter  = iwanW + trimW * 2;    // outer arch width for cream layer
+  const archOuterH = iwanH + trimW * 1.4;  // outer arch height for cream layer
+
+  // Cream outer arch — use MeshBasicMaterial so lighting doesn't dim the cream trim
+  const trimFace = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(archShape(archOuter, archOuterH), { depth: 0.24, bevelEnabled: false }),
+    new THREE.MeshBasicMaterial({ color: C.cream }),
+  );
+  trimFace.position.set(0, 0, frontZ - 0.20);
+  g.add(trimFace);
+
+  // Dark inner arch — front face at frontZ + 0.06 (6cm in front of cream)
+  // This ensures dark arch cleanly occludes the cream interior
   const archFace = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(archShape(iwanW, iwanH), { depth: 0.22, bevelEnabled: false }),
+    new THREE.ExtrudeGeometry(archShape(iwanW, iwanH), { depth: 0.28, bevelEnabled: false }),
     new THREE.MeshLambertMaterial({
       color: 0x050e1e,
       emissive: new THREE.Color(0x000208),
       emissiveIntensity: 0.8,
     }),
   );
-  archFace.position.set(-iwanW / 2, 0, frontZ - 0.22);
+  archFace.position.set(0, 0, frontZ - 0.22);
   g.add(archFace);
 
-  // ── ARCH TRIM (cream/gold extruded annular ring) ─────────────────
-  const trimW = Math.max(0.18, pylonW * 0.22);
-  const trim = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(archTrimShape(iwanW, iwanH, trimW), { depth: 0.24, bevelEnabled: false }),
-    new THREE.MeshLambertMaterial({
-      color: C.cream,
-      emissive: new THREE.Color(C.gold),
-      emissiveIntensity: 0.06,
-    }),
-  );
-  trim.position.set(-iwanW / 2, 0, frontZ - 0.01);
-  g.add(trim);
-
   // ── SPANDREL PANELS ─────────────────────────────────────────────
-  // Zone above arch opening, flanking the pointed crown
-  const spandrelBaseY = iwanH * 0.80;
-  const spandrelH2    = (h - spandrelBaseY) * 0.70;
-  const spandrelW2    = iwanW * 0.42;
+  // Panels sit on the PYLON FRONT FACES, flanking the arch — upper portion of pylons.
+  // This matches real Timurid anatomy: tigers/girih fill the pylon spandrel zone.
+  const spandrelBaseY = h * 0.35;   // start from 35% height of portal
+  const spandrelTopY  = h * 0.88;   // up to 88% height
+  const spandrelH2    = spandrelTopY - spandrelBaseY;
+  const spandrelPylW  = pylonW * 0.86; // nearly full pylon width
+  const spandrelCentX = iwanW / 2 + pylonW / 2; // center of each pylon
 
   if (opts.decals === 'tigers') {
     const tex = tigerSpandrel();
     for (const sx of [-1, 1] as const) {
       const panel = new THREE.Mesh(
-        new THREE.PlaneGeometry(spandrelW2, spandrelH2),
+        new THREE.PlaneGeometry(spandrelPylW, spandrelH2),
         new THREE.MeshLambertMaterial({ map: tex }),
       );
       if (sx === 1) panel.scale.x = -1;  // mirror right tiger
       panel.position.set(
-        sx * (spandrelW2 / 2 + 0.04),
+        sx * spandrelCentX,
         spandrelBaseY + spandrelH2 / 2,
         frontZ + 0.04,
       );
@@ -236,11 +226,11 @@ export function pishtaq(
     const spTex = girih(C.sand, C.cobalt, C.turquoise, 1);
     for (const sx of [-1, 1] as const) {
       const panel = new THREE.Mesh(
-        new THREE.PlaneGeometry(spandrelW2, spandrelH2),
+        new THREE.PlaneGeometry(spandrelPylW, spandrelH2),
         new THREE.MeshLambertMaterial({ map: spTex }),
       );
       panel.position.set(
-        sx * (spandrelW2 / 2 + 0.04),
+        sx * spandrelCentX,
         spandrelBaseY + spandrelH2 / 2,
         frontZ + 0.03,
       );
