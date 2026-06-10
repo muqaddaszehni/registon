@@ -9,6 +9,7 @@ export function addSunsetLights(scene: THREE.Scene) {
   const s = 30;
   Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 100 });
   sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.intensity = 0.45;
   scene.add(sun);
 
   // Hemisphere: sky=pale blue-white, ground=warm sand reflection

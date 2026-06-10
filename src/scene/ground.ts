@@ -129,7 +129,7 @@ export function makeGround(): THREE.Mesh {
     new THREE.MeshLambertMaterial({ map: tex }),
   );
   mesh.position.y = -0.5; // top surface at y=0
-  mesh.receiveShadow = false; // no shadow-cast darkening — floor must read pale
+  mesh.receiveShadow = true; // receive sunset shadow for depth
   mesh.name = 'ground';
   return mesh;
 }
