@@ -1,11 +1,11 @@
 import { getCard, Lang } from '../content/i18n';
 
 const css = `
-.card { position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(8px);
+#ui .card { position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(8px);
   width: min(420px, calc(100vw - 32px)); background: #fff8e7; color: #2a2350;
   border-radius: 14px; padding: 20px 22px; box-shadow: 0 8px 30px rgba(42,35,80,.35);
   border-top: 6px solid #3fc1c9; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
-.card.open { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+#ui .card.open { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 .card h3 { margin: 0 0 8px; font-size: 20px; }
 .card p { margin: 0; line-height: 1.5; font-size: 15px; }
 .card .close { position: absolute; top: 8px; right: 12px; border: none; background: none;
