@@ -4,7 +4,7 @@ import { mat, shadowed } from '../buildings/primitives';
 import { advance } from './walker';
 import { Grid, Pt } from '../world/grid';
 import { findPath } from './astar';
-import { tileToWorld, V2 } from '../world/coords';
+import { tileToWorld, worldToTile, V2 } from '../world/coords';
 
 const SPEED = 3.2; // tiles per second
 
@@ -22,7 +22,9 @@ export class Character {
     head.position.y = 1.0;
     const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.18, 10), mat(C.gold));
     cap.position.y = 1.16;
-    this.group.add(body, head, cap);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), mat(C.cream));
+    nose.position.set(0, 1.0, 0.16);
+    this.group.add(body, head, cap, nose);
     this.group.scale.setScalar(1.5);
     shadowed(this.group);
     this.pos = tileToWorld(grid.cols, grid.rows, grid.spawn);
@@ -31,9 +33,7 @@ export class Character {
 
   get worldPos(): V2 { return { ...this.pos }; }
 
-  get tile(): Pt {
-    return { x: Math.round(this.pos.x + this.grid.cols / 2 - 0.5), y: Math.round(this.pos.z + this.grid.rows / 2 - 0.5) };
-  }
+  get tile(): Pt { return worldToTile(this.grid.cols, this.grid.rows, this.pos); }
 
   walkTo(target: Pt): boolean {
     const path = findPath(this.grid, this.tile, target);

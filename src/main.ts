@@ -26,7 +26,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -38,12 +38,14 @@ const ground = makeGround(); scene.add(ground);
 
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); sizeCamera(camera); });
 
-const clock = new THREE.Clock();
+let last = performance.now();
 const tickers: Array<(dt: number) => void> = [];
 export function onTick(fn: (dt: number) => void) { tickers.push(fn); }
 
 renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const now = performance.now();
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
   for (const t of tickers) t(dt);
   renderer.render(scene, camera);
 });
