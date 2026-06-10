@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { makeSky } from './scene/sky';
+import { makeCamera, sizeCamera } from './scene/camera';
+import { addSunsetLights } from './scene/lights';
+import { makeGround } from './scene/ground';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -12,9 +15,11 @@ app.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = makeSky();
 
-const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200); // sized properly in Task 4
+const camera = makeCamera();
+addSunsetLights(scene);
+scene.add(makeGround());
 
-addEventListener('resize', () => renderer.setSize(innerWidth, innerHeight));
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); sizeCamera(camera); });
 
 const clock = new THREE.Clock();
 const tickers: Array<(dt: number) => void> = [];
