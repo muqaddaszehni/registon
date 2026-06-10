@@ -76,8 +76,14 @@ UI is DOM, not 3D — cards, toggles, and buttons are HTML/CSS layered over the 
 
 - Interior courtyards, puzzle mechanics, character customization, day/night cycle, audio narration, languages beyond EN/TJ, CMS — none of these. Future versions can revisit.
 
+## Deployment & domain
+
+- **Hosting:** Cloudflare Pages — the build output is a static bundle; deploys via `wrangler pages deploy` (CLI, no Cloudflare MCP needed).
+- **Domain:** registered at GoDaddy (account has an MCP for domain/DNS management). Recommended setup: keep registration at GoDaddy, point nameservers to Cloudflare so DNS, CDN, and TLS live in one place alongside Pages.
+- **Verification:** after DNS cutover, confirm the site loads over HTTPS on the real domain from a phone off-wifi.
+
 ## Open items
 
+- Which GoDaddy domain (or a new registration) to use — to be picked once the GoDaddy MCP is registered in Claude Code and we can list the account's domains.
 - Music track selection (toggle ships, track later — user-stated).
 - Native-speaker review of Tajik copy.
-- Hosting/domain (not yet discussed; any static host works — output is a static bundle).
