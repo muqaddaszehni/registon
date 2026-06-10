@@ -14,6 +14,8 @@ import { Character } from './character/character';
 import { bindTapToMove } from './input';
 import { addHotspotMarkers, hotspotForTile } from './hotspots';
 import { Cards } from './ui/cards';
+import { addTrees } from './ambience/trees';
+import { addDoves } from './ambience/doves';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -61,5 +63,8 @@ hero.onArrive = () => {
   const id = hotspotForTile(grid, hero.tile);
   if (id) cards.show(id); else cards.hide();
 };
+
+onTick(addTrees(scene));
+onTick(addDoves(scene, grid, () => hero.worldPos));
 
 export { scene, camera, renderer };
