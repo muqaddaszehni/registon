@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { azimuthFor, placeCamera } from './camera';
 
+export function nextTarget(turns: number): number {
+  return azimuthFor(0) + turns * (Math.PI / 2);
+}
+
 export class Orbit {
-  private index = 0;
+  private turns = 0;
   private current = azimuthFor(0);
   private target = this.current;
   private reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -10,9 +14,8 @@ export class Orbit {
   constructor(private cam: THREE.OrthographicCamera) {}
 
   rotate() {
-    this.index = (this.index + 1) % 4;
-    void this.index; // keep for future use; silence noUnusedLocals
-    this.target = this.current + Math.PI / 2; // always turn the same way
+    this.turns += 1;
+    this.target = nextTarget(this.turns); // always a clean stop, always same direction
     if (this.reduced) this.current = this.target;
   }
 
