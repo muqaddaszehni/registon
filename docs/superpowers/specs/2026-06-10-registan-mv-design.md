@@ -82,6 +82,18 @@ UI is DOM, not 3D — cards, toggles, and buttons are HTML/CSS layered over the 
 - **Domain:** registered at GoDaddy (account has an MCP for domain/DNS management). Recommended setup: keep registration at GoDaddy, point nameservers to Cloudflare so DNS, CDN, and TLS live in one place alongside Pages.
 - **Verification:** after DNS cutover, confirm the site loads over HTTPS on the real domain from a phone off-wifi.
 
+## Visual direction v2 (overhaul addendum, 2026-06-10)
+
+After the v1 build, the user benchmarked the render against reference photos (kept in `.superpowers/refs/`) and commissioned a full visual overhaul. The standing art direction is now:
+
+- **Color economy:** ~70% warm buff/cream stone, ~30% cobalt/turquoise ornament. The plaza is the palest warm surface in the scene. ACES tone mapping; no muddy browns.
+- **Light:** golden hour with the open plaza sunlit and distinct long soft shadows (sun elevated, `shadow.intensity` soft). Iwan recesses read as deep blue shadow with faint emissive detail, never black voids.
+- **Ornament:** every visible facade plane patterned — bannai diagonal lattice (~2.5 world units per diamond), meander, framed arch panels, stylized calligraphy bands. Per-building identity: Ulugh Beg = cobalt lattice; Sher-Dor = meander + twin mirrored tiger spandrels; Tilya-Kori = gold-accented panels.
+- **Geometry:** pishtaqs are pylons + lintel framing a deep (≥1.2 unit) iwan recess with arch trim; portal height ≈ 2.1× wing height; marble plinths and steps; minarets with corbel crowns and buff caps; Sher-Dor melon-fluted domes (BufferGeometry, r(θ,φ) scalloping); Tilya-Kori grand turquoise onion dome as the landmark; corner turrets.
+- **Plaza:** pale stone panels with faint medallions, walkway cross, garden beds and benches at the edges, cypress + round trees.
+
+Reference screenshots of the approved end state: `.superpowers/finals/`.
+
 ## Open items
 
 - Which GoDaddy domain (or a new registration) to use — to be picked once the GoDaddy MCP is registered in Claude Code and we can list the account's domains.
