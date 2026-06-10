@@ -402,6 +402,138 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
   return t;
 }
 
+/**
+ * Dense pylon face texture for portal flanks.
+ * Matches tilework.jpg density:
+ *   - Smaller lattice cell (×0.6 vs bannai) for tighter diamonds
+ *   - 8-pointed star accents inside diamonds
+ *   - Kufic step-meander border strips framing all four edges
+ * bg = field, line = lattice lines, motif = star/accent colour, border = border strip
+ */
+export function pylonFace(bg: number, line: number, motif: number, border: number): THREE.CanvasTexture {
+  const S = 1024;
+  const [cv, g] = canvas(S, S, bg);
+
+  // --- KUFIC BORDER STRIP ---
+  // Thick border on all four edges: cobalt background + step/T-meander in cream
+  const bw = 60; // border width in px (~6% of canvas = dense tight frame)
+  g.fillStyle = px(border);
+  g.fillRect(0, 0, S, bw);           // top
+  g.fillRect(0, S - bw, S, bw);     // bottom
+  g.fillRect(0, 0, bw, S);          // left
+  g.fillRect(S - bw, 0, bw, S);     // right
+
+  // Kufic step pattern (cream squares on cobalt border)
+  g.fillStyle = px(line);
+  const kuficStep = 22;
+  // Top and bottom strips
+  for (let i = 0; i < Math.floor(S / kuficStep); i++) {
+    const x = i * kuficStep + kuficStep / 2;
+    const sq = 12;
+    // Alternating T-step offsets: tall-short-tall pattern
+    const yOff = (i % 3 === 1) ? 8 : 14;
+    g.fillRect(x - sq / 2, yOff, sq, bw - yOff * 1.5);
+    g.fillRect(x - sq / 2, S - bw + yOff, sq, bw - yOff * 1.5);
+  }
+  // Left and right strips (vertical)
+  for (let i = 0; i < Math.floor(S / kuficStep); i++) {
+    const y = i * kuficStep + kuficStep / 2;
+    const sq = 12;
+    const xOff = (i % 3 === 1) ? 8 : 14;
+    g.fillRect(xOff, y - sq / 2, bw - xOff * 1.5, sq);
+    g.fillRect(S - bw + xOff, y - sq / 2, bw - xOff * 1.5, sq);
+  }
+
+  // Inner border accent line (thin cream line inside the cobalt strip)
+  g.strokeStyle = px(line);
+  g.lineWidth = 3;
+  g.strokeRect(bw + 4, bw + 4, S - (bw + 4) * 2, S - (bw + 4) * 2);
+
+  // --- DENSE DIAGONAL LATTICE (×0.6 of bannai → ~1.5 world units per diamond) ---
+  // Clip to inner field (inside border)
+  const innerPad = bw + 8;
+  g.save();
+  g.beginPath();
+  g.rect(innerPad, innerPad, S - innerPad * 2, S - innerPad * 2);
+  g.clip();
+
+  const cellSize = 154; // 256 × 0.6 ≈ 154px → tighter diamonds
+  const lineW = 7;
+
+  g.strokeStyle = px(line);
+  g.lineWidth = lineW;
+  g.lineCap = 'square';
+
+  const diag = Math.sqrt(2) * S;
+  const step = cellSize;
+  const count = Math.ceil(diag / step) + 4;
+
+  // Family 1: +45°
+  for (let i = -count; i < count * 2; i++) {
+    const offset = i * step;
+    g.beginPath();
+    g.moveTo(offset - S, -S);
+    g.lineTo(offset + S * 2, S * 2);
+    g.stroke();
+  }
+  // Family 2: -45°
+  for (let i = -count; i < count * 2; i++) {
+    const offset = i * step;
+    g.beginPath();
+    g.moveTo(offset + S, -S);
+    g.lineTo(offset - S, S * 2);
+    g.stroke();
+  }
+
+  // --- 8-POINTED STAR ACCENT inside each diamond cell ---
+  // Each diamond centre: same rotated grid as bannai but at cellSize/2 half-step
+  const halfCell = cellSize / 2;
+  const starR = Math.round(cellSize * 0.28); // outer star radius
+  const innerStarR = Math.round(cellSize * 0.11); // inner star notch
+
+  g.fillStyle = px(motif);
+
+  for (let iy = -3; iy < Math.ceil(S / halfCell) + 3; iy++) {
+    for (let ix = -3; ix < Math.ceil(S / halfCell) + 3; ix++) {
+      const cx = (ix + iy) * halfCell;
+      const cy = (iy - ix) * halfCell;
+      if (cx < -cellSize || cx > S + cellSize || cy < -cellSize || cy > S + cellSize) continue;
+
+      // 8-pointed star: 8 outer points + 8 inner notches
+      const pts = 8;
+      g.beginPath();
+      for (let p = 0; p < pts * 2; p++) {
+        const a = (p * Math.PI / pts) - Math.PI / 2;
+        const r = p % 2 === 0 ? starR : innerStarR;
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+        p === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+      }
+      g.closePath();
+      g.fill();
+
+      // Tiny accent square at the four cardinal notches
+      const dotR = Math.round(innerStarR * 0.55);
+      const dotOff = Math.round(cellSize * 0.40);
+      g.save();
+      g.fillStyle = px(line);
+      for (const [dx, dy] of [[dotOff, 0], [-dotOff, 0], [0, dotOff], [0, -dotOff]]) {
+        g.save();
+        g.translate(cx + dx, cy + dy);
+        g.rotate(Math.PI / 4);
+        g.fillRect(-dotR / 2, -dotR / 2, dotR, dotR);
+        g.restore();
+      }
+      g.restore();
+      g.fillStyle = px(motif);
+    }
+  }
+
+  g.restore();
+
+  return toTexture(cv);
+}
+
 // Internal colour constants used by archPanel (avoids importing palette)
 const C_SAND = 0xecdfc4;
 const C_COBALT = 0x1e5fa8;

@@ -8,6 +8,7 @@ import { makeCamera, sizeCamera } from './scene/camera';
 import { addSunsetLights } from './scene/lights';
 import { makeGround } from './scene/ground';
 import { Orbit } from './scene/orbit';
+import { makeComposer } from './scene/post';
 import { cornerButton } from './ui/buttons';
 import { ulughBeg } from './buildings/ulughbeg';
 import { sherDor } from './buildings/sherdor';
@@ -28,6 +29,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2.0)); // cap at 2× — dpr3 
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+// Tone mapping must be set BEFORE composer is created to avoid color shift
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1; // slightly reduced to keep warm floor tones, not blow them out
 app.appendChild(renderer.domElement);
@@ -39,7 +41,13 @@ const camera = makeCamera();
 addSunsetLights(scene);
 const ground = makeGround(); scene.add(ground);
 
-addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); sizeCamera(camera); });
+const composer = makeComposer(renderer, scene, camera);
+
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  sizeCamera(camera);
+});
 
 let last = performance.now();
 const tickers: Array<(dt: number) => void> = [];
@@ -50,7 +58,7 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   for (const t of tickers) t(dt);
-  renderer.render(scene, camera);
+  composer.render();
 });
 
 const orbit = new Orbit(camera);

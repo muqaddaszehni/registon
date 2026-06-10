@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { girih, bannai, meander, calligraphyBand, archPanel, tigerSpandrel } from '../patterns/textures';
+import { girih, bannai, meander, calligraphyBand, archPanel, tigerSpandrel, pylonFace } from '../patterns/textures';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 const matMap = (map: THREE.Texture) => new THREE.MeshLambertMaterial({ map });
@@ -99,14 +99,16 @@ export function pishtaq(
   const backZ  = frontZ - iwanDepth; // iwan back wall z (local)
 
   const bannaiTex = bannai(C.sand, C.cream, C.cobalt);
+  // Dense pylon-face texture: tighter grid + 8-pt stars + kufic border strips
+  const pylonTex = pylonFace(C.sand, C.cobalt, C.turquoise, C.cobalt);
 
   // ── LEFT & RIGHT PYLONS ─────────────────────────────────────────
   for (const sx of [-1, 1] as const) {
     const pylon = patternedBoxMulti(pylonW, h, d, C.sand, {
-      pz: bannai(C.sand, C.cream, C.cobalt),
+      pz: pylonTex,   // front face — the most visible — dense pylon tilework
       nz: bannaiTex,
-      px: bannaiTex,
-      nx: bannaiTex,
+      px: pylonTex,   // outer side face (visible from sides)
+      nx: pylonTex,   // inner side face (visible from inside iwan recess)
     });
     pylon.position.x = sx * (iwanW / 2 + pylonW / 2);
     // patternedBoxMulti auto-sets y = h/2 internally
@@ -163,6 +165,83 @@ export function pishtaq(
   );
   door.position.set(0, doorH / 2 + 0.01, backZ + 0.22);
   g.add(door);
+
+  // ── IWAN VAULT (quarter-dome suggestion) ─────────────────────────
+  // A shallow semi-vault surface at the top of the iwan recess, reading as a
+  // coffered quarter-dome in lapis — visible inside the arch opening.
+  // Geometry: lathe segment sweeping from 0 to PI (half revolution around Y),
+  // then positioned at the arch crown with the profile curving inward/up.
+  // The vault covers the iwan ceiling from front arch edge to back wall.
+  {
+    const vaultW = iwanW;
+    const vaultR = vaultW / 2;  // radius of the semi-vault belly
+    const vaultDepth = iwanDepth;
+    const N = 24; // azimuthal subdivisions for smoothness
+
+    // Build a half-cylinder vault surface: open half-pipe rotated so the opening
+    // faces downward into the iwan. This reads as a curved vault ceiling.
+    // Profile: half-circle sweeping from (0, 0) through the top (vaultR, vaultR).
+    // We build it as a BufferGeometry: a grid of quads spanning U=[0,PI] (half sweep)
+    // and V=[0,1] (depth, front to back).
+    const RINGS_V = 12; // depth subdivisions
+    const vaultPos: number[] = [];
+    const vaultUVs: number[] = [];
+    const vaultIdx: number[] = [];
+
+    for (let vi = 0; vi <= RINGS_V; vi++) {
+      const vt = vi / RINGS_V; // 0 = front arch edge, 1 = back
+      const zPos = frontZ - vt * vaultDepth;
+      for (let ui = 0; ui <= N; ui++) {
+        const phi = ui / N * Math.PI; // 0..PI: left to right along half circle
+        // Half-circle: x runs from -vaultR to +vaultR, y is the arc height above crown
+        // Vault sits at top of iwan (iwanH), curves down from sides to centre.
+        // We want the vault to be convex upward: y = iwanH + vaultR*(1 - sin(phi)) and x = vaultR*cos(PI - phi)
+        // So at phi=0: x=-vaultR, y=iwanH (at left edge)
+        //    at phi=PI/2: x=0, y=iwanH+vaultR (crown centre, highest)
+        //    at phi=PI:  x=+vaultR, y=iwanH (right edge)
+        // Wait — we want it to curve like a vault CEILING (concave from below).
+        // Concave ceiling: x = vaultR * cos(phi - PI/2), y = iwanH + vaultR * sin(phi - PI/2)
+        // phi=0: x = vaultR * cos(-PI/2)=0, y=iwanH + vaultR*sin(-PI/2) = iwanH - vaultR → too low
+        // Better: half-dome that spans the width and sits at top.
+        // Just a simple half-barrel: x goes -vaultR..+vaultR, y = iwanH + (vaultR * 0.3) * sin(phi)
+        // This gives a shallow arch ceiling. vaultR*0.3 = gentle curve, not a deep half-sphere.
+        const curvature = vaultR * 0.35; // shallow — just a hint, not a full hemisphere
+        const x = vaultR * Math.cos(Math.PI - phi); // maps phi 0->PI to x -vaultR->+vaultR
+        const y = iwanH + curvature * Math.sin(phi);
+        vaultPos.push(x, y, zPos);
+        vaultUVs.push(ui / N, vt);
+      }
+    }
+
+    for (let vi = 0; vi < RINGS_V; vi++) {
+      for (let ui = 0; ui < N; ui++) {
+        const a = vi * (N + 1) + ui;
+        const b = a + 1;
+        const c = (vi + 1) * (N + 1) + ui;
+        const dd = c + 1;
+        vaultIdx.push(a, c, b, b, c, dd);
+      }
+    }
+
+    const vaultGeo = new THREE.BufferGeometry();
+    vaultGeo.setAttribute('position', new THREE.Float32BufferAttribute(vaultPos, 3));
+    vaultGeo.setAttribute('uv', new THREE.Float32BufferAttribute(vaultUVs, 2));
+    vaultGeo.setIndex(vaultIdx);
+    vaultGeo.computeVertexNormals();
+
+    // Faint girih texture on the vault surface — lapis field with cobalt pattern
+    const vaultTex = girih(C.lapis, C.cobalt, C.turquoise, 2);
+    vaultTex.repeat.set(1, 1);
+
+    const vault = new THREE.Mesh(vaultGeo, new THREE.MeshLambertMaterial({
+      map: vaultTex,
+      color: 0x3a5878,         // shadowed lapis — reads darker than iwan back wall
+      emissive: new THREE.Color(C.lapis),
+      emissiveIntensity: 0.12, // just enough to hint at detail in shadow, not glow
+      side: THREE.DoubleSide,  // visible looking up from below
+    }));
+    g.add(vault);
+  }
 
   // ── REAR SEALING WALL ────────────────────────────────────────────
   // Solid patterned wall covering the iwan gap at the back face.
