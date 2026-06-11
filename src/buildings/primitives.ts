@@ -204,18 +204,21 @@ export function pishtaq(
   g.add(floorMesh);
 
   // ── IWAN SIDE WALLS ───────────────────────────────────────────────
+  // Full height: from floor to screen top (h), not just to apex.
+  // This closes the hollow zone above apex between screen and iwan back.
   const sideTileMat = new THREE.MeshLambertMaterial({ color: C.lapis });
   for (const sgn of [-1, 1] as const) {
     const sw = new THREE.Mesh(
-      new THREE.PlaneGeometry(iwanDepth, apex + 0.4),
+      new THREE.PlaneGeometry(iwanDepth, h),
       sideTileMat,
     );
-    sw.position.set(sgn * (aw / 2 + 0.2), (apex + 0.4) / 2, frontZ - iwanDepth / 2);
+    sw.position.set(sgn * (aw / 2 + 0.2), h / 2, frontZ - iwanDepth / 2);
     sw.rotation.y = -sgn * Math.PI / 2;
     g.add(sw);
   }
 
   // ── IWAN VAULT (ceiling) ──────────────────────────────────────────
+  // At apex height (arch interior ceiling).
   const vaultMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(aw + 0.4, iwanDepth),
     sideTileMat,
@@ -223,6 +226,20 @@ export function pishtaq(
   vaultMesh.position.set(0, apex + 0.2, frontZ - iwanDepth / 2);
   vaultMesh.rotation.x = Math.PI / 2;
   g.add(vaultMesh);
+
+  // ── CORNICE CAP SLAB (roof the pishtaq top) ───────────────────────
+  // Solid slab spanning full portal width + slight overhang, sitting at
+  // screen top height (h). Depth spans from screen back face to iwan back.
+  // This closes the top so no camera angle sees a hollow shell above the arch.
+  const capSlabDepth = iwanDepth + screenDepth + 0.3; // screen depth + iwan + small overhang
+  const capSlab = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.6, 0.5, capSlabDepth),
+    mat(C.sandDark),
+  );
+  // Top of slab at y = h + 0.5; center at h + 0.25
+  // Z center: screen front at frontZ, slab extends back to backZ - 0.15
+  capSlab.position.set(0, h + 0.25, frontZ - capSlabDepth / 2 + 0.15);
+  g.add(capSlab);
 
   // ── IWAN BACK WALL (rich mosaic texture) ──────────────────────────
   const iwanTex = iwanTexture(variant);

@@ -168,10 +168,13 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   const courtZCenter = -(frontD / 2 + (sideLen - wingT) / 2);
   const courtFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(courtW, courtDepth),
-    new THREE.MeshLambertMaterial({ color: 0xd4bc96 }), // warm sandy courtyard paving
+    new THREE.MeshLambertMaterial({
+      color: 0xd4bc96, // warm sandy courtyard paving
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    }),
   );
   courtFloor.rotation.x = -Math.PI / 2;
-  courtFloor.position.set(0, 0.03, courtZCenter);
+  courtFloor.position.set(0, 0.08, courtZCenter);
   raised.add(courtFloor);
 
   // ── MINARETS ────────────────────────────────────────────────────

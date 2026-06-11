@@ -12,7 +12,7 @@ export interface CameraState {
 }
 
 export function makeCamera(): THREE.OrthographicCamera {
-  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 35, 130);
   sizeCamera(cam, 1.0);
   placeCameraFromState(cam, { azimuth: azimuthFor(0), zoom: 1.0, target: new THREE.Vector3(0, 3, 0) });
   return cam;

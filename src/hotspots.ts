@@ -12,10 +12,13 @@ export function addHotspotMarkers(scene: THREE.Scene, grid: Grid): (dt: number) 
   const mats: THREE.MeshLambertMaterial[] = [];
   for (const [, tile] of grid.hotspots) {
     const w = tileToWorld(grid.cols, grid.rows, tile);
-    const m = new THREE.MeshLambertMaterial({ color: C.gold, emissive: C.gold, emissiveIntensity: 0.5 });
+    const m = new THREE.MeshLambertMaterial({
+      color: C.gold, emissive: C.gold, emissiveIntensity: 0.5,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    });
     const marker = new THREE.Mesh(new THREE.CircleGeometry(0.42, 8), m); // 8-gon ~ star tile
     marker.rotation.x = -Math.PI / 2;
-    marker.position.set(w.x, 0.02, w.z);
+    marker.position.set(w.x, 0.08, w.z);
     scene.add(marker);
     mats.push(m);
   }
