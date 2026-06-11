@@ -647,6 +647,428 @@ export function girih(bg: number, star: number, accent: number, cells = 4): THRE
   return toTexture(cv);
 }
 
+// ─── Palette constants (our C, kept as hex numbers) ────────────────────────
+const REF_SAND        = 0xecdfc4;
+const REF_COBALT      = 0x1e5fa8;
+const REF_COBALT_DARK = 0x16396e;
+const REF_TURQUOISE   = 0x42c8c8;
+const REF_TURQ_HI     = 0x5fe0e0;
+const REF_GOLD        = 0xd9b545;
+const REF_WHITE       = 0xfff6e3;
+
+/** LCG seeded random — no Math.random. Returns 0..1. */
+function lcg(seed: number) {
+  let s = seed | 1; // ensure non-zero
+  return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+
+/** Persian pointed arch (canvas coords, y grows down). */
+function archPathCtx(
+  g: CanvasRenderingContext2D,
+  cx: number, baseY: number, aw: number, springY: number, apexY: number,
+) {
+  const hw = aw / 2;
+  g.beginPath();
+  g.moveTo(cx - hw, baseY);
+  g.lineTo(cx - hw, springY);
+  g.bezierCurveTo(
+    cx - hw, springY - (springY - apexY) * 0.55,
+    cx - aw * 0.30, apexY + (springY - apexY) * 0.18, cx, apexY,
+  );
+  g.bezierCurveTo(
+    cx + aw * 0.30, apexY + (springY - apexY) * 0.18,
+    cx + hw, springY - (springY - apexY) * 0.55, cx + hw, springY,
+  );
+  g.lineTo(cx + hw, baseY);
+  g.closePath();
+}
+
+/** Eight-pointed star (khatam). */
+function star8ctx(
+  g: CanvasRenderingContext2D,
+  cx: number, cy: number, R: number, color: string, rot = Math.PI / 8,
+) {
+  const r = R * 0.45;
+  g.beginPath();
+  for (let i = 0; i < 16; i++) {
+    const a = rot + (i * Math.PI) / 8;
+    const rad = i % 2 === 0 ? R : r;
+    const x = cx + Math.cos(a) * rad;
+    const y = cy + Math.sin(a) * rad;
+    i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+  }
+  g.closePath();
+  g.fillStyle = color;
+  g.fill();
+}
+
+/** Blocky pseudo-kufic strip. Cobalt bg, white glyphs, gold trim lines. */
+function drawKuficBandCtx(
+  g: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  seed = 1, goldTrim = false,
+) {
+  g.save();
+  g.fillStyle = px(REF_COBALT); g.fillRect(x, y, w, h);
+  g.fillStyle = px(REF_WHITE);
+  const rnd = lcg(seed);
+  const bw = h * 0.16;
+  for (let gx = x + h * 0.4; gx < x + w - h * 0.4; gx += h * 0.55) {
+    const tall = h * (0.45 + rnd() * 0.35);
+    g.fillRect(gx, y + h * 0.85 - tall, bw, tall);
+    if (rnd() > 0.45) g.fillRect(gx, y + h * 0.85 - bw, h * 0.38, bw);
+    if (rnd() > 0.70) g.fillRect(gx, y + h * 0.85 - tall, h * 0.3, bw);
+  }
+  // gold trim lines (always for drum; optional for parapet)
+  if (goldTrim) {
+    g.fillStyle = px(REF_GOLD);
+    g.fillRect(x, y, w, h * 0.06);
+    g.fillRect(x, y + h * 0.94, w, h * 0.06);
+  }
+  g.restore();
+}
+
+/** Girih band: cobalt field packed with alternating turquoise/white 8-point stars. */
+function drawGirihBandCtx(
+  g: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  vertical: boolean,
+) {
+  g.save();
+  g.fillStyle = px(REF_COBALT); g.fillRect(x, y, w, h);
+  const step = vertical ? w : h;
+  const n = Math.max(1, Math.round((vertical ? h : w) / step));
+  for (let i = 0; i < n; i++) {
+    const cx = vertical ? x + w / 2 : x + step * (i + 0.5);
+    const cy = vertical ? y + step * (i + 0.5) : y + h / 2;
+    star8ctx(g, cx, cy, step * 0.42, i % 2 ? px(REF_TURQUOISE) : px(REF_WHITE));
+    star8ctx(g, cx, cy, step * 0.20, px(REF_GOLD));
+  }
+  g.restore();
+}
+
+/** Square-kufic labyrinth fret — filled panel head. */
+const SQ_KUFIC_PAT = [
+  '############.',
+  '#..........#.',
+  '#.########.#.',
+  '#.#......#.#.',
+  '#.#.####.#.#.',
+  '#.#.#..#...#.',
+  '#.#.#.#####..',
+  '#...#......#.',
+  '#.#########.',
+  '#...........',
+  '#############',
+  '.............',
+];
+function drawSqKufic(
+  g: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  fg: string, bg: string, accent: string,
+) {
+  g.save();
+  g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.fillStyle = bg; g.fillRect(x, y, w, h);
+  const rows = SQ_KUFIC_PAT.length, cols = 13;
+  const cell = Math.max(4, Math.min(w, h) / 14);
+  for (let ty = 0; ty * cell * rows < h + cell * rows; ty++) {
+    for (let tx = 0; tx * cell * cols < w + cell * cols; tx++) {
+      const col = (tx + ty) % 2 ? fg : accent;
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          if (SQ_KUFIC_PAT[j][i] !== '#') continue;
+          g.fillStyle = col;
+          g.fillRect(x + tx * cell * cols + i * cell, y + ty * cell * rows + j * cell,
+            cell * 0.92, cell * 0.92);
+        }
+      }
+    }
+  }
+  g.restore();
+}
+
+/**
+ * Full 2-storey arcade facade (port of reference drawArcadeFace).
+ * Non-tiling; sized to wing dimensions. Priority=true → 2x LOD tier.
+ * goldTrim=true → Tilya-Kori gilt line under parapet.
+ */
+export function arcadeFacade(wingLenM: number, wingHM: number, goldTrim = false): THREE.CanvasTexture {
+  // Base width: clamp to 1024 wide. Height is proportional.
+  const W = Math.min(1024, Math.max(256, Math.round(wingLenM * 52)));
+  const H = Math.max(128, Math.round(W * wingHM / wingLenM));
+
+  // Scale bays to wing length: 1 bay per ~2.5 world units, min 2
+  const bays  = Math.max(2, Math.round(wingLenM / 2.5));
+  const stories = 2;
+
+  function draw(g: CanvasRenderingContext2D, w: number, h: number) {
+    const rnd = lcg(17);
+
+    // ── BASE WALL: buff brick coursing ────────────────────────────
+    g.fillStyle = px(REF_SAND); g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(120,90,50,0.22)'; g.lineWidth = 1;
+    const courseH = Math.max(4, Math.round(h * 0.018));
+    for (let y = 0; y < h; y += courseH) {
+      g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+    }
+    // seeded tonal variation
+    const patchCount = Math.round(w / 3);
+    for (let i = 0; i < patchCount; i++) {
+      const px2 = rnd() * w, py2 = rnd() * h;
+      g.fillStyle = rnd() > 0.5 ? 'rgba(255,235,190,0.05)' : 'rgba(90,60,30,0.05)';
+      g.fillRect(px2, py2, 18, 6);
+    }
+
+    // ── CRENELLATED TURQUOISE CREST ───────────────────────────────
+    const crest = h * 0.035;
+    const parapetH = h * 0.085;
+    g.fillStyle = px(REF_TURQUOISE);
+    for (let x = 0; x < w; x += crest * 2.2) {
+      g.beginPath();
+      g.moveTo(x, crest); g.lineTo(x + crest * 1.1, crest);
+      g.lineTo(x + crest * 0.55, 0); g.closePath(); g.fill();
+    }
+
+    // ── KUFIC PARAPET BAND ────────────────────────────────────────
+    drawKuficBandCtx(g, 0, crest, w, parapetH, 7, goldTrim);
+    if (goldTrim) {
+      g.fillStyle = px(REF_GOLD);
+      g.fillRect(0, crest + parapetH, w, h * 0.012);
+    }
+
+    // ── MARBLE DADO AT BASE ───────────────────────────────────────
+    const dadoH = h * 0.07;
+    g.fillStyle = '#cfc3a4';
+    g.fillRect(0, h - dadoH, w, dadoH);
+    g.fillStyle = 'rgba(120,105,70,0.4)';
+    const bayW = w / bays;
+    for (let x = 0; x < w; x += bayW / 4) g.fillRect(x, h - dadoH, 2, dadoH);
+
+    // ── PER-BAY AND PER-STOREY FEATURES ──────────────────────────
+    const top0  = crest + parapetH;
+    const storyH = (h - top0 - dadoH) / stories;
+
+    for (let s = 0; s < stories; s++) {
+      const top = top0 + s * storyH;
+      for (let b = 0; b < bays; b++) {
+        const x0 = b * bayW;
+        const m  = bayW * 0.12;
+
+        // Cobalt tile frame
+        g.fillStyle = px(REF_COBALT);
+        g.fillRect(x0 + m * 0.45, top + storyH * 0.05, bayW - m * 0.9, storyH * 0.93);
+        g.strokeStyle = px(REF_WHITE);
+        g.lineWidth = Math.max(1.5, bayW * 0.012);
+        g.strokeRect(x0 + m * 0.45, top + storyH * 0.05, bayW - m * 0.9, storyH * 0.93);
+
+        // Square-kufic panel head
+        drawSqKufic(
+          g, x0 + m * 0.7, top + storyH * 0.08, bayW - m * 1.4, storyH * 0.13,
+          (b + s) % 2 ? px(REF_WHITE) : px(REF_TURQ_HI),
+          px(REF_COBALT), px(REF_TURQUOISE),
+        );
+
+        // Sand recess field (inside frame)
+        g.fillStyle = px(REF_SAND);
+        g.fillRect(x0 + m, top + storyH * 0.24, bayW - m * 2, storyH * 0.74);
+
+        // Recessed pointed-arch niche with shadow gradient
+        const aw    = bayW - m * 2.7;
+        const base  = top + storyH * 0.98;
+        const spring = top + storyH * 0.52;
+        const apex  = top + storyH * 0.30;
+        const grad  = g.createLinearGradient(0, apex, 0, base);
+        grad.addColorStop(0, '#4a3318');
+        grad.addColorStop(0.25, '#5d4426');
+        grad.addColorStop(1, '#8a6a3e');
+        archPathCtx(g, x0 + bayW / 2, base, aw, spring, apex);
+        g.fillStyle = grad; g.fill();
+
+        // Turquoise outer arch outline
+        g.lineWidth = Math.max(2, bayW * 0.03);
+        g.strokeStyle = px(REF_TURQUOISE); g.stroke();
+
+        // White double arch outline (slightly wider)
+        g.lineWidth = Math.max(1, bayW * 0.012);
+        g.strokeStyle = px(REF_WHITE);
+        archPathCtx(g, x0 + bayW / 2, base, aw + bayW * 0.05, spring - storyH * 0.012, apex - storyH * 0.02);
+        g.stroke();
+
+        // Ground-floor open doorway (dark hujra)
+        if (s === stories - 1) {
+          g.fillStyle = '#241a0e';
+          g.fillRect(x0 + bayW / 2 - aw * 0.28, top + storyH * 0.62, aw * 0.56, storyH * 0.36);
+        }
+
+        // Turquoise spandrel rosettes
+        star8ctx(g, x0 + m * 1.5,          top + storyH * 0.33, bayW * 0.05, px(REF_TURQ_HI));
+        star8ctx(g, x0 + bayW - m * 1.5,   top + storyH * 0.33, bayW * 0.05, px(REF_TURQ_HI));
+      }
+
+      // Girih pilaster strips between bays
+      for (let b = 0; b <= bays; b++) {
+        const bx = b * bayW;
+        drawGirihBandCtx(g, bx - bayW * 0.045, top + storyH * 0.02, bayW * 0.09, storyH * 0.96, true);
+      }
+    }
+  }
+
+  const [cv, g] = canvas(W, H, REF_SAND, draw, true);
+  draw(g, W, H);
+  // Non-tiling: clamp wrapping
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = 8;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  textureRegistry.addTexture(cv, t);
+  return t;
+}
+
+/**
+ * Brick wall with seeded tonal variation + banna'i diamond lattice.
+ * Upgrade over plain `bannai`: adds visible brick coursing.
+ * Tileable 1024².
+ */
+export function brickWall(bg: number, line: number, motif: number): THREE.CanvasTexture {
+  const BASE = 1024;
+
+  function draw(g: CanvasRenderingContext2D, S: number, _H: number) {
+    const rnd = lcg(42);
+    g.fillStyle = px(bg); g.fillRect(0, 0, S, S);
+
+    // Brick coursing
+    const brickH = Math.round(S * 0.031); // ~32px at 1024
+    const brickW = Math.round(S * 0.094); // ~96px at 1024
+    g.strokeStyle = 'rgba(120,90,50,0.28)'; g.lineWidth = Math.max(1, S * 0.0015);
+    for (let y = 0; y < S; y += brickH) {
+      g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
+      const row = Math.round(y / brickH);
+      const xOff = row % 2 ? 0 : brickW / 2;
+      for (let x = xOff; x < S; x += brickW) {
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + brickH); g.stroke();
+      }
+    }
+
+    // Seeded tonal patches (not Math.random)
+    const patchCount = Math.round(S * S / 3200);
+    for (let i = 0; i < patchCount; i++) {
+      const px2 = rnd() * S, py2 = rnd() * S;
+      g.fillStyle = rnd() > 0.5 ? 'rgba(255,235,190,0.05)' : 'rgba(90,60,30,0.05)';
+      g.fillRect(px2, py2, Math.round(S * 0.023), Math.round(S * 0.008));
+    }
+
+    // Banna'i glazed-brick diamonds (same logic as original makeWallTexture)
+    const gsize = Math.round(S * 0.0625); // 64/1024
+    for (let j = 0; j < S / gsize; j++) {
+      for (let i = 0; i < S / gsize; i++) {
+        if ((i + j) % 2 === 0) continue;
+        const cx2 = i * gsize + gsize / 2, cy2 = j * gsize + gsize / 2;
+        const s2 = gsize * 0.30;
+        g.save();
+        g.translate(cx2, cy2); g.rotate(Math.PI / 4);
+        g.fillStyle = px(motif); g.fillRect(-s2, -s2, s2 * 2, s2 * 2);
+        g.fillStyle = px(line);  g.fillRect(-s2 * 0.45, -s2 * 0.45, s2 * 0.9, s2 * 0.9);
+        g.restore();
+      }
+    }
+  }
+
+  const [cv, g] = canvas(BASE, BASE, bg, draw, true);
+  draw(g, BASE, BASE);
+  return toTexture(cv);
+}
+
+/**
+ * Drum inscription band: grand kufic inscription + turquoise cap + dark base + gold trim lines.
+ * Port of reference makeDrumTexture. 1024×256 tileable.
+ */
+export function drumBand(): THREE.CanvasTexture {
+  const W = 1024, H = 256;
+
+  function draw(g: CanvasRenderingContext2D, w: number, h: number) {
+    // Turquoise upper cap
+    g.fillStyle = px(REF_TURQUOISE); g.fillRect(0, 0, w, h * 0.22);
+    // Dark cobalt lower band
+    g.fillStyle = px(REF_COBALT_DARK); g.fillRect(0, h * 0.78, w, h * 0.22);
+    // Gold trim lines
+    g.fillStyle = px(REF_GOLD);
+    g.fillRect(0, h * 0.20, w, h * 0.03);
+    g.fillRect(0, h * 0.77, w, h * 0.03);
+    // Grand kufic inscription in the middle 56%
+    drawKuficBandCtx(g, 0, h * 0.22, w, h * 0.56, 3, false);
+  }
+
+  const [cv, g] = canvas(W, H, REF_TURQUOISE, draw, true);
+  draw(g, W, H);
+  return toTexture(cv, 3, 1); // repeat 3× around drum circumference
+}
+
+/**
+ * Minaret shaft: spiral banna'i lattice + 3 kufic inscription collars.
+ * Port of reference makeMinaretTexture. 512×1024, repeat 2 wide.
+ */
+export function minaretShaft(): THREE.CanvasTexture {
+  const W = 512, H = 1024;
+
+  function draw(g: CanvasRenderingContext2D, w: number, h: number) {
+    g.fillStyle = px(REF_SAND); g.fillRect(0, 0, w, h);
+
+    // Spiral banna'i: offset every other row by half-step to read as spiral
+    const gsize = Math.round(w * 0.109); // ~56/512
+    for (let j = 0; j < h / gsize; j++) {
+      for (let i = 0; i < w / gsize; i++) {
+        if ((i + j) % 2 === 0) continue;
+        // Spiral shift: each row shifts by a fraction of gsize
+        const spiralShift = (j * gsize * 0.12) % gsize;
+        const cx2 = (i + 0.5) * gsize + spiralShift;
+        const cy2 = (j + 0.5) * gsize;
+        const s2 = gsize * 0.27;
+        g.save();
+        g.translate(cx2, cy2); g.rotate(Math.PI / 4);
+        g.fillStyle = px(REF_COBALT); g.fillRect(-s2, -s2, s2 * 2, s2 * 2);
+        g.fillStyle = px(REF_TURQUOISE); g.fillRect(-s2 * 0.4, -s2 * 0.4, s2 * 0.8, s2 * 0.8);
+        g.restore();
+      }
+    }
+
+    // Three inscription collars at ~16%, 50%, 84% height
+    const collarH = Math.round(h * 0.059); // ~60/1024
+    for (const fy of [0.16, 0.50, 0.84]) {
+      drawKuficBandCtx(g, 0, Math.round(h * fy - collarH / 2), w, collarH, Math.round(fy * 100), true);
+    }
+  }
+
+  const [cv, g] = canvas(W, H, REF_SAND, draw, true);
+  draw(g, W, H);
+  return toTexture(cv, 2, 1);
+}
+
+/**
+ * Seamless girih tile: cobalt bg, white 8-point star centre, gold inner star,
+ * turquoise quarter-stars at corners → tiles seamlessly.
+ * Port of reference makeGirihTileTexture. 256². Used on pilaster strips + inner arch.
+ */
+export function girihTile(): THREE.CanvasTexture {
+  const S = 256;
+
+  function draw(g: CanvasRenderingContext2D, w: number, _h: number) {
+    g.fillStyle = px(REF_COBALT); g.fillRect(0, 0, w, w);
+    star8ctx(g, w / 2, w / 2, w * 0.34, px(REF_WHITE));
+    star8ctx(g, w / 2, w / 2, w * 0.15, px(REF_GOLD));
+    // Quarter-stars at each corner for seamless tiling
+    for (const [cx, cy] of [[0, 0], [w, 0], [0, w], [w, w]] as [number, number][]) {
+      star8ctx(g, cx, cy, w * 0.20, px(REF_TURQUOISE));
+    }
+  }
+
+  const [cv, g] = canvas(S, S, REF_COBALT, draw, false); // pilasters don't need 2x
+  draw(g, S, S);
+  return toTexture(cv);
+}
+
 /**
  * Spandrel tiger panel — same tiger+sun motif but
  * cropped to a square 512×512 aspect, no outer black border frame.

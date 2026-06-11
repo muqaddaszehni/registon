@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { girih, bannai, meander, calligraphyBand, archPanel, portalTexture, iwanTexture, ropeTexture, type PortalVariant } from '../patterns/textures';
+import { bannai, archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
 import { textureRegistry } from '../scene/lod';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -45,10 +45,16 @@ export function patternedBoxMulti(
   function faceTexRepeat(tex: THREE.Texture, worldW: number, worldH: number): THREE.Material {
     const t = tex.clone() as THREE.CanvasTexture;
     t.needsUpdate = true;
-    const PATTERN_WORLD = 10.0; // one bannai tile = 10 world units (4 diamonds/tile → ~2.5 wu/diamond — large geometry like refs)
-    // Clamp to at least 0.5 repeats so shallow faces don't show stretched blobs
-    t.repeat.set(Math.max(0.5, worldW / PATTERN_WORLD), Math.max(0.5, worldH / PATTERN_WORLD));
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    // Non-tiling textures (ClampToEdge) keep their wrapping and stay repeat(1,1)
+    if (tex.wrapS === THREE.ClampToEdgeWrapping) {
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.repeat.set(1, 1);
+    } else {
+      const PATTERN_WORLD = 10.0; // one bannai tile = 10 world units (4 diamonds/tile → ~2.5 wu/diamond — large geometry like refs)
+      // Clamp to at least 0.5 repeats so shallow faces don't show stretched blobs
+      t.repeat.set(Math.max(0.5, worldW / PATTERN_WORLD), Math.max(0.5, worldH / PATTERN_WORLD));
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    }
     // Register clone so it gets needsUpdate=true on tier changes (clone shares source canvas)
     if (tex instanceof THREE.CanvasTexture && tex.image instanceof HTMLCanvasElement) {
       textureRegistry.addTexture(tex.image, t);
@@ -141,8 +147,8 @@ export function pishtaq(
   // Smaller screen recessed ~40% into the iwan — stepped portal frames
   const iw = aw + 2.6 * (w / 22);   // scale inner width proportionally (ref: +2.6 on 22m portal)
   const ih = apex + 1.4 * (h / 30); // scale inner height
-  const innerFrontTex = girih(C.lapis, C.cobalt, C.turquoise, 2);
-  innerFrontTex.repeat.set(1 / (iw * 0.45), 1 / (ih * 0.45));
+  const innerFrontTex = girihTile();
+  innerFrontTex.repeat.set(Math.max(1, Math.round(iw * 0.7)), Math.max(1, Math.round(ih * 0.7)));
   const innerFrontMat = new THREE.MeshLambertMaterial({ map: innerFrontTex });
   const innerScreen = new THREE.Mesh(
     archScreenGeometry(iw, ih, aw * 0.84, spring * 0.92, apex * 0.90, screenDepth * 0.5),
@@ -253,8 +259,8 @@ export function dome(r: number, ribbed = false): THREE.Group {
   // ── DRUM ─────────────────────────────────────────────────────────
   const drumH = r * 0.75;
   const drumR  = r * 0.72;
-  const drumTex = calligraphyBand(C.lapis, C.cream);
-  drumTex.repeat.set(Math.max(1, Math.round(drumR * 2)), 1);
+  const drumTex = drumBand();
+  drumTex.repeat.set(Math.max(1, Math.round(drumR * 2 * Math.PI / 3)), 1);
   const drum = new THREE.Mesh(
     new THREE.CylinderGeometry(drumR, drumR * 1.05, drumH, 24),
     new THREE.MeshLambertMaterial({ map: drumTex }),
@@ -425,8 +431,8 @@ export function dome(r: number, ribbed = false): THREE.Group {
 export function minaret(h: number): THREE.Group {
   const g = new THREE.Group();
 
-  // ── SHAFT (tapered, bannai pattern) ──────────────────────────────
-  const shaftTex = bannai(C.sand, C.cream, C.cobalt);
+  // ── SHAFT (tapered, spiral banna'i + kufic collars) ──────────────
+  const shaftTex = minaretShaft();
   shaftTex.repeat.set(1, Math.max(1, Math.round(h / 8)));
   const shaftMat = new THREE.MeshLambertMaterial({ map: shaftTex });
   const rBase = h * 0.095;  // slightly fatter base (real ones are stout)
@@ -494,57 +500,27 @@ export function arcadeWall(
 ): THREE.Group {
   const g = new THREE.Group();
 
+  // Side/back faces: upgraded brick wall with seeded tonal variation + banna'i diamonds
   let extTex: THREE.Texture;
-  let innerTex: THREE.Texture;
   if (wingStyle === 'meander') {
-    // SD: meander-dominant — rich cobalt/cream interlocking swastika grid
-    extTex  = meander(C.cobalt, C.cream);
-    innerTex = meander(C.cobalt, C.sandLight);
+    extTex = brickWall(C.cobalt, C.cream, C.sandLight);
   } else if (wingStyle === 'arch-floral') {
-    // TK: warm gold-accent field — bannai with gold motif dots instead of cobalt
-    extTex  = bannai(C.sand, C.cream, C.gold);
-    innerTex = bannai(C.sandLight, C.cream, C.gold);
+    extTex = brickWall(C.sand, C.cream, C.gold);
   } else {
-    // UB default: diagonal lattice with star (cobalt diamond) accents
-    extTex  = bannai(C.sand, C.cream, C.cobalt);
-    innerTex = bannai(C.sand, C.cream, C.sandDark);
+    extTex = brickWall(C.sand, C.cream, C.cobalt);
   }
 
-  // Wall slab: patterned on all exterior faces; arch panels placed proud on +Z front
+  // Arcade facade texture for the +Z front face
+  const goldTrim = (wingStyle === 'arch-floral');
+  const facadeTex = arcadeFacade(len, h, goldTrim);
+
+  // Wall slab: arcade face on +Z front, brick on sides/back
   g.add(patternedBoxMulti(len, h, d, C.sand, {
-    pz: innerTex, // front wall behind panels — subtle so arch panels pop
+    pz: facadeTex, // full 2-storey arcade facade
     px: extTex,
     nx: extTex,
-    nz: extTex,  // outside back
+    nz: extTex,   // outside back
   }));
-
-  // Front face: two rows of framed arch panels (flat planes proud of wall)
-  const n = Math.max(2, Math.floor(len / 2.6));
-  const panelW = (len * 0.9) / n;
-  const panelH = h * 0.42;
-  const panelSpacingX = len / n;
-
-  for (let s = 0; s < 2; s++) {
-    for (let i = 0; i < n; i++) {
-      const px2 = -len / 2 + panelSpacingX * (i + 0.5);
-      const py2 = s === 0 ? panelH * 0.55 : panelH * 0.55 + h * 0.46;
-      // archPanel is non-tiling; generate per-panel (shared per storey to save draw calls)
-      const panelTex = archPanel(Math.round(panelW * 100), Math.round(panelH * 100));
-      const panel = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelW * 0.92, panelH * 0.9),
-        new THREE.MeshLambertMaterial({ map: panelTex }),
-      );
-      panel.position.set(px2, py2, d / 2 + 0.02);
-      g.add(panel);
-    }
-  }
-
-  // Top calligraphy band
-  const bandH = h * 0.10;
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(len * 0.96, bandH),
-    new THREE.MeshLambertMaterial({ map: calligraphyBand(C.lapis, C.cream) }));
-  strip.position.set(0, h - bandH / 2 - h * 0.02, d / 2 + 0.02);
-  g.add(strip);
 
   return g;
 }
