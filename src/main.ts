@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { makeSky } from './scene/sky';
 import { makeCamera, sizeCamera } from './scene/camera';
 import { addSunsetLights } from './scene/lights';
-import { makeGround } from './scene/ground';
+import { makeGround, makeApron } from './scene/ground';
 import { Orbit } from './scene/orbit';
 import { ZoomController } from './scene/zoom';
 import { PanController } from './scene/pan';
@@ -42,6 +42,7 @@ scene.background = makeSky();
 const camera = makeCamera();
 addSunsetLights(scene);
 const ground = makeGround(); scene.add(ground);
+const apron = makeApron(); scene.add(apron);
 
 const composer = makeComposer(renderer, scene, camera);
 

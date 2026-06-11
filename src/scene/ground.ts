@@ -134,6 +134,38 @@ export function makeGround(): THREE.Mesh {
   return mesh;
 }
 
+/**
+ * Earth-tone apron extending beyond the main slab on west/east/north sides
+ * to support overhanging building backs. Top surface at y=-0.05 (just below
+ * main ground top at y=0). Three box strips: west, east, north.
+ */
+export function makeApron(): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'apron';
+
+  // Slightly darker warm earth, distinct from plaza but not jarring
+  const apronMat = new THREE.MeshLambertMaterial({ color: 0xb8a882 });
+  const apronY = -0.3; // center Y; box height 0.5 → top surface at -0.3+0.25 = -0.05
+  const apronH = 0.5;
+
+  // West strip: x from -21 to -14 (beyond slab west edge at x=-14), z from -11 to +11
+  const west = new THREE.Mesh(new THREE.BoxGeometry(7, apronH, 22), apronMat);
+  west.position.set(-17.5, apronY, 0);
+  g.add(west);
+
+  // East strip: x from +14 to +21, z from -11 to +11
+  const east = new THREE.Mesh(new THREE.BoxGeometry(7, apronH, 22), apronMat);
+  east.position.set(17.5, apronY, 0);
+  g.add(east);
+
+  // North strip: z from -20 to -11 (behind slab north edge at z=-11), x from -21 to +21
+  const north = new THREE.Mesh(new THREE.BoxGeometry(42, apronH, 9), apronMat);
+  north.position.set(0, apronY, -15.5);
+  g.add(north);
+
+  return g;
+}
+
 /** Draw a faint concentric-circle + petal-tick medallion at (cx,cy). */
 function drawMedallion(
   g: CanvasRenderingContext2D,
