@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { pishtaq, arcadeWall, minaret, dome, shadowed } from './primitives';
+import { pishtaq, minaret, dome, shadowed, patternedBoxMulti } from './primitives';
 import { C } from '../palette';
-import { bannai, type PortalVariant } from '../patterns/textures';
+import { bannai, arcadeFacade, brickWall, type PortalVariant } from '../patterns/textures';
 
 export interface MadrasahOpts {
   facadeLen: number;        // total width along its plaza edge
@@ -20,24 +20,38 @@ export interface MadrasahOpts {
   turrets?: { offset: number; h: number; r: number }[];
   /** Wing texture identity: 'diagonal-lattice'(default/UB) | 'meander'(SD) | 'arch-floral'(TK) */
   wingStyle?: 'diagonal-lattice' | 'meander' | 'arch-floral';
+  /** Total depth front-face to back-face (world units). Default 9.0 */
+  totalDepth?: number;
+  /** Thickness of side and back wings. Default 2.0 */
+  wingThickness?: number;
+  /** Gold trim on courtyard arcade bands (Tilya-Kori). Default false */
+  goldTrim?: boolean;
 }
 
 export function madrasah(o: MadrasahOpts): THREE.Group {
   const g = new THREE.Group();
-  const wingLen = (o.facadeLen - o.portal.w) / 2;
+
+  // ── GEOMETRY CONSTANTS ──────────────────────────────────────────────
+  const totalD = o.totalDepth    ?? 9.0;
+  const wingT  = o.wingThickness ?? 2.0;
+  const frontD = o.portal.d;           // front wing depth = portal depth (d=5, so frontD=5)
+  const sideLen = totalD - frontD;     // side wings Z span = 9 - 5 = 4  (NOTE: frontD=portal.d=5, not 2.5)
+  const sideH   = o.wingH * 0.87;     // courtyard wings slightly shorter
+  // Front wing center: local Z=0; front face at +frontD/2; back face at -frontD/2
+  // Side wings run from z=-frontD/2 back to z=-(frontD/2+sideLen)
+  const sideZCenter  = -(frontD / 2 + sideLen / 2);
+  const backZCenter  = -(frontD / 2 + sideLen - wingT / 2);
+  const goldTrim = o.goldTrim ?? false;
 
   // ── MARBLE PLINTH ────────────────────────────────────────────────
-  // Sits from y=0 to y=0.6; flush with front face (no plaza protrusion to avoid
-  // collision issues), extends full facade width + slight side/back overhang.
   const plinthH = 0.6;
-  const plinthW = o.facadeLen + 1.0;    // 0.5 overhang each side
-  const plinthD = o.portal.d + 0.5;     // flush front (portal front at +d/2), extends back 0.5
-  // Center plinth so its FRONT face is at +plinthD/2 - 0.0 = portal front = +portal.d/2.
-  // Portal front is at local z = +portal.d/2. Plinth front must match → plinth center z = +(plinthD/2 - portal.d/2) ... wait:
-  // Plinth spans z from -(portal.d/2 + 0.5) to +(portal.d/2). Center = portal.d/2 - (0.5+portal.d)/2.
-  // Simpler: front flush at z = +portal.d/2; back at z = -(portal.d/2 + 0.5).
-  // center z = (portal.d/2 + (-(portal.d/2+0.5))) / 2 = -0.25
-  const plinthCenterZ = -(0.25); // 0.25 behind portal front center
+  const plinthW = o.facadeLen + 1.0;
+  const plinthD = totalD + 0.5;       // full footprint + slight overhang front/back
+  // Front edge at +frontD/2; plinthD spans totalD+0.5
+  // plinthCenterZ so front of plinth = +frontD/2 + 0.0 (flush):
+  // plinth front at plinthCenterZ + plinthD/2 = frontD/2  → plinthCenterZ = frontD/2 - plinthD/2
+  // = frontD/2 - (totalD+0.5)/2 = (frontD - totalD - 0.5) / 2
+  const plinthCenterZ = (frontD - totalD - 0.5) / 2;
   const plinthMat = new THREE.MeshLambertMaterial({ color: C.marble });
   const plinthGeo = new THREE.BoxGeometry(plinthW, plinthH, plinthD);
   const plinth = new THREE.Mesh(plinthGeo, plinthMat);
@@ -47,26 +61,13 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   g.add(plinth);
 
   // ── PORTAL STEPS ─────────────────────────────────────────────────
-  // 3 shallow steps descending from plinth top to plaza, centered on portal.
-  // Step widths taper; each step protrudes forward 0.25 units into plaza.
-  // Maximum protrusion: 3 × 0.25 = 0.75 units in front of portal front face.
-  // Portal front = +portal.d/2 local z; steps protrude to z = +portal.d/2 + 0.75.
-  // This is safe: col 3 (UB) and col 24 (SD) are blocked '#' tiles.
-  // TK steps at z = -10.0 + 0.75 = -9.25, well clear of row 3 center at z=-7.5.
-  // Steps: 3 broad marble steps descending from plinth face to plaza.
-  // Each step is 0.40 deep (reads clearly in iso), heights 0.20/0.20/0.20 = 0.60 total = plinth height.
-  // Maximum protrusion: 3 × 0.40 = 1.20 units ahead of portal front face.
-  // Safe: col 3 (UB/west wall x=-11.0) → steps reach x=-9.8, but col 3 center is at x=-10.5
-  //   and col 3 is '#' (blocked), so no collision with walkable tile.
-  // TK: steps reach world z = -10.0 + 1.20 = -8.80; row 3 center at z=-7.5 → 1.3 units clear.
-  const stepW = o.portal.w * 0.8;   // 80% portal width → broad, visible
+  const stepW = o.portal.w * 0.8;
   const stepDepth = 0.40;
-  const stepH = plinthH / 3;        // 0.20 each, stacks to full plinth height
+  const stepH = plinthH / 3;
   for (let i = 0; i < 3; i++) {
-    // Step i: center is at portal front + (i+0.5) * stepDepth
     const sz = o.portal.d / 2 + (i + 0.5) * stepDepth;
-    const sy = plinthH - (i + 0.5) * stepH; // y center: top step at plinthH-stepH/2, bottom at stepH/2
-    const sw = stepW * (1 - i * 0.04);   // slightly taper each step outward
+    const sy = plinthH - (i + 0.5) * stepH;
+    const sw = stepW * (1 - i * 0.04);
     const stepMesh = new THREE.Mesh(
       new THREE.BoxGeometry(sw, stepH, stepDepth),
       plinthMat,
@@ -81,21 +82,106 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   const raised = new THREE.Group();
   raised.position.y = plinthH;
 
+  // Exterior brick texture (per wingStyle)
+  let extTex: THREE.Texture;
+  if (o.wingStyle === 'meander') {
+    extTex = brickWall(C.cobalt, C.cream, C.sandLight);
+  } else if (o.wingStyle === 'arch-floral') {
+    extTex = brickWall(C.sand, C.cream, C.gold);
+  } else {
+    extTex = brickWall(C.sand, C.cream, C.cobalt);
+  }
+
+  // ── FRONT WING ──────────────────────────────────────────────────
+  // Width=facadeLen, height=wingH, depth=frontD, centered at Z=0.
+  // +Z face (plaza-facing): full arcade facade.
+  // -Z face (courtyard): interior arcade.
+  // py (roof top): no texture → plain mat(C.sand) via patternedBoxMulti default.
+  const frontArcade   = arcadeFacade(o.facadeLen, o.wingH, goldTrim);
+  const frontInterior = arcadeFacade(o.facadeLen, o.wingH, false);
+  const frontWing = patternedBoxMulti(o.facadeLen, o.wingH, frontD, C.sand, {
+    pz: frontArcade,
+    nz: frontInterior,
+    px: extTex,
+    nx: extTex,
+    // py omitted → plain sand (roof visible from top)
+  });
+  // patternedBoxMulti sets position.y = h/2 internally — only override X/Z
+  frontWing.position.z = 0;
+  raised.add(frontWing);
+
+  // ── PORTAL (pishtaq stands in front of / over the front wing) ────
   const portal = pishtaq(o.portal.w, o.portal.h, o.portal.d, {
     variant: o.variant,
   });
   raised.add(portal);
 
-  for (const side of [-1, 1]) {
-    const wing = arcadeWall(wingLen, o.wingH, o.portal.d * 0.8, o.wingStyle);
-    wing.position.x = side * (o.portal.w / 2 + wingLen / 2);
-    raised.add(wing);
+  // ── SIDE WINGS ──────────────────────────────────────────────────
+  // Each wing: width=wingT, height=sideH, depth=sideLen.
+  // Positioned so they abut the front wing's sides and extend back.
+  // sideXCenter: outer edge at ±facadeLen/2, inner at ±(facadeLen/2 - wingT).
+  // Center: ±(facadeLen/2 - wingT/2).
+  const sideXCenter  = o.facadeLen / 2 - wingT / 2;
+  const sideInterior = arcadeFacade(sideLen, sideH, false);
+
+  for (const sgn of [-1, 1] as const) {
+    // sgn=-1: left wing (−X outer), interior = +X face
+    // sgn=+1: right wing (+X outer), interior = −X face
+    const sideWing = patternedBoxMulti(wingT, sideH, sideLen, C.sand, {
+      px: sgn < 0 ? sideInterior : extTex,
+      nx: sgn > 0 ? sideInterior : extTex,
+      pz: extTex,
+      nz: extTex,
+      // py omitted → plain sand roof
+    });
+    // patternedBoxMulti sets y internally; set only X and Z
+    sideWing.position.x = sgn * sideXCenter;
+    sideWing.position.z = sideZCenter;
+    raised.add(sideWing);
   }
+
+  // ── BACK WING ───────────────────────────────────────────────────
+  // Width=facadeLen, height=sideH, depth=wingT.
+  // +Z face (courtyard-facing): interior arcade.
+  // -Z face (exterior back): brick.
+  const backInterior = arcadeFacade(o.facadeLen, sideH, false);
+  const backWing = patternedBoxMulti(o.facadeLen, sideH, wingT, C.sand, {
+    pz: backInterior,
+    nz: extTex,
+    px: extTex,
+    nx: extTex,
+    // py omitted → plain sand roof
+  });
+  backWing.position.x = 0;
+  backWing.position.z = backZCenter;
+  raised.add(backWing);
+
+  // ── COURTYARD FLOOR ─────────────────────────────────────────────
+  // Fills the open courtyard between the four wings.
+  // Width: facadeLen - 2*wingT (between inner faces of side wings).
+  // Depth: sideLen - wingT (between back face of front wing and front face of back wing).
+  const courtW = o.facadeLen - 2 * wingT;
+  const courtDepth = sideLen - wingT;
+  // Z center of courtyard: start at -frontD/2 (front wing back face),
+  // end at -(frontD/2 + sideLen - wingT) (back wing front face).
+  // Center: -(frontD/2 + (sideLen - wingT)/2)
+  const courtZCenter = -(frontD / 2 + (sideLen - wingT) / 2);
+  const courtFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(courtW, courtDepth),
+    new THREE.MeshLambertMaterial({ color: 0xd4bc96 }), // warm sandy courtyard paving
+  );
+  courtFloor.rotation.x = -Math.PI / 2;
+  courtFloor.position.set(0, 0.03, courtZCenter);
+  raised.add(courtFloor);
+
+  // ── MINARETS ────────────────────────────────────────────────────
   for (const m of o.minarets ?? []) {
     const t = minaret(m.h);
     t.position.x = m.offset;
     raised.add(t);
   }
+
+  // ── DOMES ───────────────────────────────────────────────────────
   for (const d of o.domes ?? []) {
     const dd = dome(d.r, d.ribbed);
     dd.position.set(d.offset, o.wingH, -o.portal.d * 0.1);
@@ -103,7 +189,6 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   }
 
   // ── CORNER TURRETS ───────────────────────────────────────────────
-  // Small patterned cylinders with turquoise dome caps at facade ends.
   for (const turret of o.turrets ?? []) {
     const tg = new THREE.Group();
     // Shaft: patterned cylinder
@@ -120,7 +205,6 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
 
     // Small turquoise dome cap on top
     const capR = turret.r * 0.9;
-    // Lathe dome profile — simple onion
     const capPts: THREE.Vector2[] = [
       new THREE.Vector2(0, 0),
       new THREE.Vector2(capR * 0.9, capR * 0.3),
