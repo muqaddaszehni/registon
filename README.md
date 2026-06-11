@@ -38,3 +38,5 @@ npm run build    # tsc + vite production build
 ## Credits
 
 Architectural reference photos from [Wikimedia Commons](https://commons.wikimedia.org/) (Creative Commons); used as visual reference only — all geometry is hand-coded. Tiger and calligraphy motifs are stylized interpretations. Tajik translations pending review by a native speaker.
+
+Several modeling techniques (true-arch portal screens, telescoping iwan frames, rope columns, square-kufic frets, per-madrasah tympanum art, hollow courtyards) were adapted from [muqaddaszehni/kijon#1](https://github.com/muqaddaszehni/kijon/pull/1), an earlier procedural Registan study, reworked here for this project's palette, scale, LOD pipeline, and walkable world.
