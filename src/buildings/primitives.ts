@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { girih, bannai, meander, calligraphyBand, archPanel, tigerSpandrel, pylonFace } from '../patterns/textures';
+import { girih, bannai, meander, calligraphyBand, archPanel, portalTexture, iwanTexture, ropeTexture, type PortalVariant } from '../patterns/textures';
 import { textureRegistry } from '../scene/lod';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -70,277 +70,174 @@ export function patternedBoxMulti(
   return m;
 }
 
-function archShape(w: number, h: number): THREE.Shape {
-  const s = new THREE.Shape(); const r = w / 2;
-  s.moveTo(-r, 0); s.lineTo(-r, h - r);
-  s.quadraticCurveTo(-r, h - r * 0.1, 0, h);       // slightly pointed Persian arch
-  s.quadraticCurveTo(r, h - r * 0.1, r, h - r);
-  s.lineTo(r, 0); s.closePath();
-  return s;
+/**
+ * Arch-screen geometry: rectangle with a pointed-arch hole, extruded.
+ * Origin: centre-bottom of screen face, front face at z = 0.
+ * aw = arch width, spring = spring height, apex = apex height, depth = extrusion.
+ * The hole path uses the same bezier profile as the reference (Persian pointed arch).
+ */
+export function archScreenGeometry(
+  w: number, h: number, aw: number, spring: number, apex: number, depth: number,
+): THREE.ExtrudeGeometry {
+  const shape = new THREE.Shape();
+  shape.moveTo(-w / 2, 0); shape.lineTo(-w / 2, h);
+  shape.lineTo(w / 2, h);  shape.lineTo(w / 2, 0);
+  shape.closePath();
+
+  const hole = new THREE.Path();
+  hole.moveTo(-aw / 2, 0);
+  hole.lineTo(-aw / 2, spring);
+  hole.bezierCurveTo(
+    -aw / 2, spring + (apex - spring) * 0.55,
+    -aw * 0.30, apex - (apex - spring) * 0.18, 0, apex);
+  hole.bezierCurveTo(
+    aw * 0.30, apex - (apex - spring) * 0.18,
+    aw / 2, spring + (apex - spring) * 0.55, aw / 2, spring);
+  hole.lineTo(aw / 2, 0);
+  hole.closePath();
+  shape.holes.push(hole);
+
+  return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
 }
 
 /**
- * Monumental portal with anatomically-correct parts:
- *   - Two flanking PYLON boxes (bannai-patterned)
- *   - LINTEL box bridging top (girih front + calligraphy band)
- *   - IWAN: floor + back wall (girih dark) + two side walls + deep-shadow arch face
- *   - ARCH TRIM: cream/gold extruded annular ring following pointed arch edge
- *   - SPANDREL panels: 'tigers' → twin mirrored tigerSpandrel planes; else girih
- *   - CALLIGRAPHY BAND: proud plane at very top of lintel
+ * Monumental portal with true arch hole (ExtrudeGeometry with bezier-arch hole),
+ * rope columns, telescoping inner arch, and iwan interior texture.
  *
- * opts.decals = 'tigers' → Sher-Dor twin mirrored tiger spandrels
+ * variant controls tympanum art and portal texture identity:
+ *   'ulughbeg'  → girih star constellation tympanum
+ *   'sherdor'   → full tiger + doe + human-faced sun tympanum
+ *   'tilyakori' → gold rosette/arabesque tympanum
  */
 export function pishtaq(
   w: number, h: number, d: number,
-  opts: { decals?: 'tigers' } = {},
+  opts: { variant?: PortalVariant } = {},
 ): THREE.Group {
   const g = new THREE.Group();
+  const variant: PortalVariant = opts.variant ?? 'ulughbeg';
 
-  // Proportions
-  const pylonW    = w * 0.20;        // border frame width (~20% each side — matches real proportions)
-  const iwanW     = w - pylonW * 2;  // clear arch opening width
-  const iwanH     = h * 0.78;        // height of arch opening
-  const iwanDepth = Math.min(d * 0.85, 4.5); // recess depth (inward, away from plaza)
+  // Proportions matching reference: aw=0.55w, spring=0.42h, apex=0.74h
+  const screenDepth = Math.max(0.5, d * 0.12); // thickness of screen slab
+  const aw     = w * 0.55;
+  const spring = h * 0.42;
+  const apex   = h * 0.74;
+  const iwanDepth = Math.min(d * 0.85, 4.5);
+  const frontZ = d / 2;
+  const backZ  = frontZ - iwanDepth;
 
-  const frontZ = d / 2;              // portal front face z (local)
-  const backZ  = frontZ - iwanDepth; // iwan back wall z (local)
+  // ── PORTAL SCREEN (arch hole geometry) ─────────────────────────
+  const frontTex = portalTexture(variant, w, h);
+  const frontMat = new THREE.MeshLambertMaterial({ map: frontTex });
+  const sideMat  = new THREE.MeshLambertMaterial({ color: C.cobalt });
+  const screen = new THREE.Mesh(
+    archScreenGeometry(w, h, aw, spring, apex, screenDepth),
+    [frontMat, sideMat],
+  );
+  // Front face at frontZ; ExtrudeGeometry extrudes in +Z, so shift back
+  screen.position.set(0, 0, frontZ - screenDepth);
+  g.add(screen);
 
-  const bannaiTex = bannai(C.sand, C.cream, C.cobalt);
-  // Dense pylon-face texture: tighter grid + 8-pt stars + kufic border strips
-  const pylonTex = pylonFace(C.sand, C.cobalt, C.turquoise, C.cobalt);
+  // ── TELESCOPING INNER ARCH (40% into iwan) ──────────────────────
+  // Smaller screen recessed ~40% into the iwan — stepped portal frames
+  const iw = aw + 2.6 * (w / 22);   // scale inner width proportionally (ref: +2.6 on 22m portal)
+  const ih = apex + 1.4 * (h / 30); // scale inner height
+  const innerFrontTex = girih(C.lapis, C.cobalt, C.turquoise, 2);
+  innerFrontTex.repeat.set(1 / (iw * 0.45), 1 / (ih * 0.45));
+  const innerFrontMat = new THREE.MeshLambertMaterial({ map: innerFrontTex });
+  const innerScreen = new THREE.Mesh(
+    archScreenGeometry(iw, ih, aw * 0.84, spring * 0.92, apex * 0.90, screenDepth * 0.5),
+    [innerFrontMat, sideMat],
+  );
+  innerScreen.position.set(0, 0, frontZ - screenDepth - iwanDepth * 0.42);
+  g.add(innerScreen);
 
-  // ── LEFT & RIGHT PYLONS ─────────────────────────────────────────
-  for (const sx of [-1, 1] as const) {
-    const pylon = patternedBoxMulti(pylonW, h, d, C.sand, {
-      pz: pylonTex,   // front face — the most visible — dense pylon tilework
-      nz: bannaiTex,
-      px: pylonTex,   // outer side face (visible from sides)
-      nx: pylonTex,   // inner side face (visible from inside iwan recess)
-    });
-    pylon.position.x = sx * (iwanW / 2 + pylonW / 2);
-    // patternedBoxMulti auto-sets y = h/2 internally
-    g.add(pylon);
+  // ── ROPE COLUMNS ──────────────────────────────────────────────────
+  // Flanking columns at screen plane; scaled from ref 0.85/1.0 radius on 22m portal → ~0.3 on ours
+  const colR    = w * 0.038;          // ~0.30 for w=8 (ref: 0.85/22 × our_w)
+  const colH    = h + screenDepth;
+  const colOffset = w / 2 + colR * 1.6;
+
+  const ropeTex = ropeTexture();
+  ropeTex.wrapS = ropeTex.wrapT = THREE.RepeatWrapping;
+  ropeTex.repeat.set(2, 9);
+  const ropeMat = new THREE.MeshLambertMaterial({ map: ropeTex });
+  // Turquoise dome-like knob material
+  const knobMat = new THREE.MeshLambertMaterial({
+    color: C.turquoise,
+    emissive: new THREE.Color(C.turquoise),
+    emissiveIntensity: 0.14,
+  });
+  const tipMat = new THREE.MeshLambertMaterial({ color: C.gold });
+
+  for (const sgn of [-1, 1] as const) {
+    // Shaft (tapered cylinder)
+    const col = new THREE.Mesh(
+      new THREE.CylinderGeometry(colR * 0.85, colR, colH, 20),
+      ropeMat,
+    );
+    col.position.set(sgn * colOffset, colH / 2, frontZ - screenDepth / 2);
+    g.add(col);
+
+    // Turquoise knob
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(colR * 1.18, 20, 14), knobMat);
+    knob.position.set(sgn * colOffset, colH + colR * 1.2, frontZ - screenDepth / 2);
+    g.add(knob);
+
+    // Gold tip cone
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(colR * 0.35, colR * 1.3, 12), tipMat);
+    tip.position.set(sgn * colOffset, colH + colR * 2.8, frontZ - screenDepth / 2);
+    g.add(tip);
   }
 
-  // ── LINTEL ──────────────────────────────────────────────────────
-  const lintelH = h - iwanH;
-  const lintel = patternedBoxMulti(iwanW, lintelH, d, C.sand, {
-    pz: girih(C.sand, C.cobalt, C.turquoise, 2),
-    nz: bannaiTex,
-    px: bannaiTex,
-    nx: bannaiTex,
-  });
-  lintel.position.set(0, iwanH + lintelH / 2, 0);
-  g.add(lintel);
-
-  // ── IWAN FLOOR ──────────────────────────────────────────────────
-  const floor = new THREE.Mesh(
-    new THREE.BoxGeometry(iwanW, 0.12, iwanDepth),
+  // ── IWAN FLOOR ────────────────────────────────────────────────────
+  const floorMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(aw + 0.4, 0.12, iwanDepth),
     mat(C.sandDark),
   );
-  floor.position.set(0, 0.06, frontZ - iwanDepth / 2);
-  g.add(floor);
+  floorMesh.position.set(0, 0.06, frontZ - iwanDepth / 2);
+  g.add(floorMesh);
 
-  // ── IWAN SIDE WALLS ─────────────────────────────────────────────
-  for (const sx of [-1, 1] as const) {
+  // ── IWAN SIDE WALLS ───────────────────────────────────────────────
+  const sideTileMat = new THREE.MeshLambertMaterial({ color: C.lapis });
+  for (const sgn of [-1, 1] as const) {
     const sw = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, iwanH, iwanDepth),
-      new THREE.MeshLambertMaterial({ color: 0x4a6898 }),  // shadowed blue
+      new THREE.PlaneGeometry(iwanDepth, apex + 0.4),
+      sideTileMat,
     );
-    sw.position.set(sx * (iwanW / 2 - 0.07), iwanH / 2, frontZ - iwanDepth / 2);
+    sw.position.set(sgn * (aw / 2 + 0.2), (apex + 0.4) / 2, frontZ - iwanDepth / 2);
+    sw.rotation.y = -sgn * Math.PI / 2;
     g.add(sw);
   }
 
-  // ── IWAN BACK WALL ──────────────────────────────────────────────
+  // ── IWAN VAULT (ceiling) ──────────────────────────────────────────
+  const vaultMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(aw + 0.4, iwanDepth),
+    sideTileMat,
+  );
+  vaultMesh.position.set(0, apex + 0.2, frontZ - iwanDepth / 2);
+  vaultMesh.rotation.x = Math.PI / 2;
+  g.add(vaultMesh);
+
+  // ── IWAN BACK WALL (rich mosaic texture) ──────────────────────────
+  const iwanTex = iwanTexture(variant);
   const backWall = new THREE.Mesh(
-    new THREE.BoxGeometry(iwanW, iwanH, 0.14),
+    new THREE.PlaneGeometry(aw + 0.4, apex + 0.4),
     new THREE.MeshLambertMaterial({
-      map: (() => { const t = girih(C.lapis, C.cobalt, C.turquoise, 2); t.repeat.set(0.5, 0.5); return t; })(),
-      color: 0x3a587e,
-      emissive: new THREE.Color(0x16396e),
-      emissiveIntensity: 0.25,
+      map: iwanTex,
+      emissive: new THREE.Color(C.lapis),
+      emissiveIntensity: 0.20,
     }),
   );
-  backWall.position.set(0, iwanH / 2, backZ + 0.07);
+  backWall.position.set(0, (apex + 0.4) / 2, backZ + 0.07);
   g.add(backWall);
 
-  // Small door on back wall
-  const doorW = iwanW * 0.30, doorH = iwanH * 0.35;
-  const door = new THREE.Mesh(
-    new THREE.PlaneGeometry(doorW, doorH),
-    mat(0x0f1f35),
-  );
-  door.position.set(0, doorH / 2 + 0.01, backZ + 0.22);
-  g.add(door);
-
-  // ── IWAN VAULT (quarter-dome suggestion) ─────────────────────────
-  // A shallow semi-vault surface at the top of the iwan recess, reading as a
-  // coffered quarter-dome in lapis — visible inside the arch opening.
-  // Geometry: lathe segment sweeping from 0 to PI (half revolution around Y),
-  // then positioned at the arch crown with the profile curving inward/up.
-  // The vault covers the iwan ceiling from front arch edge to back wall.
-  {
-    const vaultW = iwanW;
-    const vaultR = vaultW / 2;  // radius of the semi-vault belly
-    const vaultDepth = iwanDepth;
-    const N = 24; // azimuthal subdivisions for smoothness
-
-    // Build a half-cylinder vault surface: open half-pipe rotated so the opening
-    // faces downward into the iwan. This reads as a curved vault ceiling.
-    // Profile: half-circle sweeping from (0, 0) through the top (vaultR, vaultR).
-    // We build it as a BufferGeometry: a grid of quads spanning U=[0,PI] (half sweep)
-    // and V=[0,1] (depth, front to back).
-    const RINGS_V = 12; // depth subdivisions
-    const vaultPos: number[] = [];
-    const vaultUVs: number[] = [];
-    const vaultIdx: number[] = [];
-
-    for (let vi = 0; vi <= RINGS_V; vi++) {
-      const vt = vi / RINGS_V; // 0 = front arch edge, 1 = back
-      const zPos = frontZ - vt * vaultDepth;
-      for (let ui = 0; ui <= N; ui++) {
-        const phi = ui / N * Math.PI; // 0..PI: left to right along half circle
-        // Half-circle: x runs from -vaultR to +vaultR, y is the arc height above crown
-        // Vault sits at top of iwan (iwanH), curves down from sides to centre.
-        // We want the vault to be convex upward: y = iwanH + vaultR*(1 - sin(phi)) and x = vaultR*cos(PI - phi)
-        // So at phi=0: x=-vaultR, y=iwanH (at left edge)
-        //    at phi=PI/2: x=0, y=iwanH+vaultR (crown centre, highest)
-        //    at phi=PI:  x=+vaultR, y=iwanH (right edge)
-        // Wait — we want it to curve like a vault CEILING (concave from below).
-        // Concave ceiling: x = vaultR * cos(phi - PI/2), y = iwanH + vaultR * sin(phi - PI/2)
-        // phi=0: x = vaultR * cos(-PI/2)=0, y=iwanH + vaultR*sin(-PI/2) = iwanH - vaultR → too low
-        // Better: half-dome that spans the width and sits at top.
-        // Just a simple half-barrel: x goes -vaultR..+vaultR, y = iwanH + (vaultR * 0.3) * sin(phi)
-        // This gives a shallow arch ceiling. vaultR*0.3 = gentle curve, not a deep half-sphere.
-        const curvature = vaultR * 0.35; // shallow — just a hint, not a full hemisphere
-        const x = vaultR * Math.cos(Math.PI - phi); // maps phi 0->PI to x -vaultR->+vaultR
-        const y = iwanH + curvature * Math.sin(phi);
-        vaultPos.push(x, y, zPos);
-        vaultUVs.push(ui / N, vt);
-      }
-    }
-
-    for (let vi = 0; vi < RINGS_V; vi++) {
-      for (let ui = 0; ui < N; ui++) {
-        const a = vi * (N + 1) + ui;
-        const b = a + 1;
-        const c = (vi + 1) * (N + 1) + ui;
-        const dd = c + 1;
-        vaultIdx.push(a, c, b, b, c, dd);
-      }
-    }
-
-    const vaultGeo = new THREE.BufferGeometry();
-    vaultGeo.setAttribute('position', new THREE.Float32BufferAttribute(vaultPos, 3));
-    vaultGeo.setAttribute('uv', new THREE.Float32BufferAttribute(vaultUVs, 2));
-    vaultGeo.setIndex(vaultIdx);
-    vaultGeo.computeVertexNormals();
-
-    // Faint girih texture on the vault surface — lapis field with cobalt pattern
-    const vaultTex = girih(C.lapis, C.cobalt, C.turquoise, 2);
-    vaultTex.repeat.set(1, 1);
-
-    const vault = new THREE.Mesh(vaultGeo, new THREE.MeshLambertMaterial({
-      map: vaultTex,
-      color: 0x3a5878,         // shadowed lapis — reads darker than iwan back wall
-      emissive: new THREE.Color(C.lapis),
-      emissiveIntensity: 0.12, // just enough to hint at detail in shadow, not glow
-      side: THREE.DoubleSide,  // visible looking up from below
-    }));
-    g.add(vault);
-  }
-
-  // ── REAR SEALING WALL ────────────────────────────────────────────
-  // Solid patterned wall covering the iwan gap at the back face.
-  // position.set() overrides patternedBoxMulti's internal y=h/2; we must pass
-  // y = rearWallH/2 so the box bottom sits at y=0 (ground level).
-  const rearWallH = iwanH; // seal from ground to lintel height
-  const rearWall = patternedBoxMulti(iwanW, rearWallH, 0.24, C.sand, {
-    nz: bannai(C.sand, C.cream, C.cobalt),  // exterior back face (nz = -Z face)
-    pz: bannaiTex,
+  // ── REAR SEALING WALL (behind portal at back face) ─────────────────
+  const rearWall = patternedBoxMulti(aw + 0.4, apex, 0.22, C.sand, {
+    nz: bannai(C.sand, C.cream, C.cobalt),
+    pz: bannai(C.sand, C.cream, C.cobalt),
   });
-  // z: back face of portal is at -frontZ; place centre of 0.24-thick wall there
-  rearWall.position.set(0, rearWallH / 2, -(frontZ - 0.12));
+  rearWall.position.set(0, apex / 2, -(frontZ - 0.11));
   g.add(rearWall);
-
-  // ── ARCH TRIM + FACE (two-layer technique) ─────────────────────
-  // Layer 1: CREAM outer arch (slightly wider/taller) — forms the visible trim band
-  // Layer 2: DARK inner arch (exact iwan size, protrudes slightly MORE forward)
-  // Cream ring is visible around the dark arch edges.
-  const trimW = Math.max(0.32, iwanW * 0.06);
-  const archOuter  = iwanW + trimW * 2;    // outer arch width for cream layer
-  const archOuterH = iwanH + trimW * 1.4;  // outer arch height for cream layer
-
-  // Cream outer arch — Lambert with low emissive so it reads bright-but-matte without blooming
-  const trimFace = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(archShape(archOuter, archOuterH), { depth: 0.24, bevelEnabled: false }),
-    new THREE.MeshLambertMaterial({ color: C.cream, emissive: new THREE.Color(C.cream), emissiveIntensity: 0.35 }),
-  );
-  trimFace.position.set(0, 0, frontZ - 0.20);
-  g.add(trimFace);
-
-  // Dark inner arch — front face at frontZ + 0.06 (6cm in front of cream)
-  // This ensures dark arch cleanly occludes the cream interior
-  // Slight lapis emissive so arch reads as deep shadow with blue detail hint, not void.
-  const archFace = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(archShape(iwanW, iwanH), { depth: 0.28, bevelEnabled: false }),
-    new THREE.MeshLambertMaterial({
-      color: 0x050e1e,
-      emissive: new THREE.Color(0x16396e),
-      emissiveIntensity: 0.18,
-    }),
-  );
-  archFace.position.set(0, 0, frontZ - 0.22);
-  g.add(archFace);
-
-  // ── SPANDREL PANELS ─────────────────────────────────────────────
-  // Panels sit on the PYLON FRONT FACES, flanking the arch — upper portion of pylons.
-  // This matches real Timurid anatomy: tigers/girih fill the pylon spandrel zone.
-  const spandrelBaseY = h * 0.35;   // start from 35% height of portal
-  const spandrelTopY  = h * 0.88;   // up to 88% height
-  const spandrelH2    = spandrelTopY - spandrelBaseY;
-  const spandrelPylW  = pylonW * 0.86; // nearly full pylon width
-  const spandrelCentX = iwanW / 2 + pylonW / 2; // center of each pylon
-
-  if (opts.decals === 'tigers') {
-    const tex = tigerSpandrel();
-    for (const sx of [-1, 1] as const) {
-      const panel = new THREE.Mesh(
-        new THREE.PlaneGeometry(spandrelPylW, spandrelH2),
-        new THREE.MeshLambertMaterial({ map: tex }),
-      );
-      if (sx === 1) panel.scale.x = -1;  // mirror right tiger
-      panel.position.set(
-        sx * spandrelCentX,
-        spandrelBaseY + spandrelH2 / 2,
-        frontZ + 0.04,
-      );
-      g.add(panel);
-    }
-  } else {
-    const spTex = girih(C.sand, C.cobalt, C.turquoise, 1);
-    for (const sx of [-1, 1] as const) {
-      const panel = new THREE.Mesh(
-        new THREE.PlaneGeometry(spandrelPylW, spandrelH2),
-        new THREE.MeshLambertMaterial({ map: spTex }),
-      );
-      panel.position.set(
-        sx * spandrelCentX,
-        spandrelBaseY + spandrelH2 / 2,
-        frontZ + 0.03,
-      );
-      g.add(panel);
-    }
-  }
-
-  // ── CALLIGRAPHY BAND ─────────────────────────────────────────────
-  const bandH = h * 0.085;
-  const band = new THREE.Mesh(
-    new THREE.PlaneGeometry(w * 0.94, bandH),
-    new THREE.MeshLambertMaterial({ map: calligraphyBand(C.lapis, C.cream) }),
-  );
-  band.position.set(0, h - bandH / 2 - h * 0.01, frontZ + 0.03);
-  g.add(band);
 
   return g;
 }

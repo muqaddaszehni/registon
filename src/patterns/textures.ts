@@ -578,10 +578,19 @@ export function pylonFace(bg: number, line: number, motif: number, border: numbe
   return toTexture(cv);
 }
 
-// Internal colour constants used by archPanel (avoids importing palette)
-const C_SAND = 0xecdfc4;
+// Internal colour constants used by archPanel and portal helpers (avoids importing palette)
+const C_SAND   = 0xecdfc4;
 const C_COBALT = 0x1e5fa8;
-const C_CREAM = 0xfff6e3;
+const C_CREAM  = 0xfff6e3;
+// Additional portal palette constants (our C palette authoritative)
+const C_COBALT_DARK  = 0x16396e;
+const C_TURQUOISE    = 0x42c8c8;
+const C_TURQUOISE_HI = 0x5fe0e0;
+const C_GOLD         = 0xd9b545;
+const C_TIGER        = 0xe8943a;
+const C_STRIPE       = 0x5a3414;
+const C_NIGHT        = 0x0d1a2e;
+const C_WHITE        = 0xfff6e3;
 
 /** 8-pointed girih star lattice: proper 8-pointed star polygon with inner/outer radii. */
 export function girih(bg: number, star: number, accent: number, cells = 4): THREE.CanvasTexture {
@@ -748,4 +757,458 @@ export function tigerSpandrel(): THREE.CanvasTexture {
   const t2 = toTexture(cv);
   t2.wrapS = t2.wrapT = THREE.ClampToEdgeWrapping;
   return t2;
+}
+
+/* ================================================================ */
+/* PR#1 portal helpers — seeded LCG replaces all Math.random        */
+/* ================================================================ */
+
+/**
+ * LCG seeded random — replaces Math.random in all portal generators.
+ * Park-Miller: s = (s * 16807) % 2147483647
+ */
+function makeLcg(seed: number) {
+  let s = seed | 0 || 1;
+  return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+
+/**
+ * Persian pointed arch path (canvas coords, y grows downward).
+ * Arch spans [cx-aw/2, cx+aw/2], base at baseY, springs at springY, apex at apexY.
+ */
+function portalArchPath(
+  ctx: CanvasRenderingContext2D,
+  cx: number, baseY: number, aw: number, springY: number, apexY: number,
+) {
+  const hw = aw / 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - hw, baseY);
+  ctx.lineTo(cx - hw, springY);
+  ctx.bezierCurveTo(
+    cx - hw, springY - (springY - apexY) * 0.55,
+    cx - aw * 0.30, apexY + (springY - apexY) * 0.18, cx, apexY);
+  ctx.bezierCurveTo(
+    cx + aw * 0.30, apexY + (springY - apexY) * 0.18,
+    cx + hw, springY - (springY - apexY) * 0.55, cx + hw, springY);
+  ctx.lineTo(cx + hw, baseY);
+  ctx.closePath();
+}
+
+/** Eight-pointed star (khatam) — basic girih mosaic unit. */
+function portalStar8(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, R: number, color: string, rot = Math.PI / 8,
+) {
+  const r = R * 0.45;
+  ctx.beginPath();
+  for (let i = 0; i < 16; i++) {
+    const a = rot + (i * Math.PI) / 8;
+    const rad = i % 2 === 0 ? R : r;
+    const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+/** Blocky pseudo-kufic calligraphy strip on cobalt. Seeded — no Math.random. */
+function portalDrawKuficBand(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, seed = 1,
+) {
+  ctx.save();
+  ctx.fillStyle = px(C_COBALT); ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = px(C_WHITE);
+  const rnd = makeLcg(seed);
+  const bw = h * 0.16;
+  for (let gx = x + h * 0.4; gx < x + w - h * 0.4; gx += h * 0.55) {
+    const tall = h * (0.45 + rnd() * 0.35);
+    ctx.fillRect(gx, y + h * 0.85 - tall, bw, tall);
+    if (rnd() > 0.45) ctx.fillRect(gx, y + h * 0.85 - bw, h * 0.38, bw);
+    if (rnd() > 0.7)  ctx.fillRect(gx, y + h * 0.85 - tall, h * 0.3, bw);
+  }
+  ctx.fillStyle = px(C_GOLD);
+  ctx.fillRect(x, y, w, h * 0.06);
+  ctx.fillRect(x, y + h * 0.94, w, h * 0.06);
+  ctx.restore();
+}
+
+/** Band of 8-point stars — used to frame great portals. */
+function portalDrawGirihBand(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, vertical: boolean,
+) {
+  ctx.save();
+  ctx.fillStyle = px(C_COBALT); ctx.fillRect(x, y, w, h);
+  const step = vertical ? w : h;
+  const n = Math.max(1, Math.round((vertical ? h : w) / step));
+  for (let i = 0; i < n; i++) {
+    const cx = vertical ? x + w / 2 : x + step * (i + 0.5);
+    const cy = vertical ? y + step * (i + 0.5) : y + h / 2;
+    portalStar8(ctx, cx, cy, step * 0.42, i % 2 ? px(C_TURQUOISE) : px(C_WHITE));
+    portalStar8(ctx, cx, cy, step * 0.20, px(C_GOLD));
+  }
+  ctx.restore();
+}
+
+/** Square-kufic block motif tiled over the area. No random. */
+const SQ_KUFIC = [
+  '############.',
+  '#..........#.',
+  '#.########.#.',
+  '#.#......#.#.',
+  '#.#.####.#.#.',
+  '#.#.#..#...#.',
+  '#.#.#.#####..',
+  '#...#......#.',
+  '#.#########.',
+  '#...........',
+  '#############',
+  '.............',
+];
+function portalDrawSquareKufic(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number,
+  fg = px(C_WHITE), bg = px(C_COBALT), accent = px(C_TURQUOISE),
+) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = bg; ctx.fillRect(x, y, w, h);
+  const rows = SQ_KUFIC.length, cols = 13;
+  const cell = Math.max(4, Math.min(w, h) / 14);
+  for (let ty = 0; ty * cell * rows < h + cell * rows; ty++) {
+    for (let tx = 0; tx * cell * cols < w + cell * cols; tx++) {
+      const col = (tx + ty) % 2 ? fg : accent;
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          if (SQ_KUFIC[j][i] !== '#') continue;
+          ctx.fillStyle = col;
+          ctx.fillRect(x + tx * cell * cols + i * cell, y + ty * cell * rows + j * cell, cell * 0.92, cell * 0.92);
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+/** Vertical pseudo-kufic inscription strip (rotated). */
+function portalDrawKuficBandV(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, seed = 1,
+) {
+  const tmp = document.createElement('canvas');
+  tmp.width = Math.ceil(h); tmp.height = Math.ceil(w);
+  portalDrawKuficBand(tmp.getContext('2d')!, 0, 0, tmp.width, tmp.height, seed);
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(tmp, -h / 2, -w / 2);
+  ctx.restore();
+}
+
+/* ======================== Tympanum art ========================= */
+
+/** Ulugh Beg: constellation of girih stars ("the sky of astronomers"). */
+function drawStarsTympanum(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number,
+) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = px(C_COBALT); ctx.fillRect(x, y, w, h);
+  const rnd = makeLcg(13);
+  // faint gold lattice
+  ctx.strokeStyle = 'rgba(217,181,69,0.4)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 12; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x + rnd() * w, y);
+    ctx.lineTo(x + rnd() * w, y + h);
+    ctx.stroke();
+  }
+  // constellation (biased to sides since arch cuts the middle)
+  const place: [number, number, number, number][] = [];
+  for (let i = 0; i < 30; i++) {
+    const side = i % 2 ? 1 : -1;
+    const fx = 0.5 + side * (0.18 + rnd() * 0.32);
+    const fy = i < 10 ? 0.12 + rnd() * 0.3 : 0.12 + rnd() * 0.8;
+    place.push([fx, fy, 0.07 + rnd() * 0.085, rnd() * Math.PI]);
+  }
+  for (let i = 0; i < 8; i++) place.push([0.2 + rnd() * 0.6, 0.05 + rnd() * 0.22, 0.05 + rnd() * 0.06, rnd()]);
+  place.forEach(([fx, fy, fr, rot], i) => {
+    const col = [px(C_WHITE), px(C_TURQUOISE_HI), px(C_GOLD)][i % 3];
+    portalStar8(ctx, x + fx * w, y + fy * h, fr * h * 1.6, col, rot);
+    portalStar8(ctx, x + fx * w, y + fy * h, fr * h * 0.6, i % 3 === 2 ? px(C_COBALT) : px(C_GOLD), rot);
+  });
+  ctx.restore();
+}
+
+/** Sher-Dor: full tiger w/ doe + human-faced sun. Seeded — no Math.random. */
+function portalDrawTiger(
+  ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, dir: number,
+) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s * dir, s);
+
+  // white doe
+  ctx.save();
+  ctx.translate(118, 4);
+  ctx.fillStyle = px(C_WHITE);
+  ctx.beginPath(); ctx.ellipse(0, 0, 26, 11, -0.12, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(24, -12, 8, 6, 0.5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = px(C_WHITE); ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+  for (const [lx, a] of [[-18, 2.6], [-10, 2.9], [12, 0.5], [20, 0.2]] as [number, number][]) {
+    ctx.beginPath(); ctx.moveTo(lx, 6);
+    ctx.lineTo(lx + Math.cos(a) * 18, 6 + Math.sin(a) * 16); ctx.stroke();
+  }
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(28, -18); ctx.lineTo(34, -28); ctx.stroke();
+  ctx.restore();
+
+  // human-faced sun
+  ctx.save();
+  ctx.translate(-18, -52);
+  ctx.fillStyle = px(C_GOLD);
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a - 0.09) * 30, Math.sin(a - 0.09) * 30);
+    ctx.lineTo(Math.cos(a) * 46, Math.sin(a) * 46);
+    ctx.lineTo(Math.cos(a + 0.09) * 30, Math.sin(a + 0.09) * 30);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = '#e8c06a';
+  ctx.beginPath(); ctx.arc(0, 0, 31, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#7a5520'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(-10, -4, 5.5, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+  ctx.beginPath(); ctx.arc(10, -4, 5.5, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-15, -12); ctx.quadraticCurveTo(-9, -16, -3, -12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(3, -12); ctx.quadraticCurveTo(9, -16, 15, -12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(-2, 6); ctx.lineTo(2, 6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 9, 7, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+  ctx.restore();
+
+  // tiger body
+  ctx.fillStyle = px(C_TIGER);
+  ctx.beginPath(); ctx.ellipse(0, 0, 58, 22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = px(C_TIGER); ctx.lineWidth = 10; ctx.lineCap = 'round';
+  for (const [lx, dx, dy] of [[-40, -26, 26], [-28, -10, 30], [30, 18, 28], [44, 32, 20]] as [number, number, number][]) {
+    ctx.beginPath(); ctx.moveTo(lx, 12); ctx.lineTo(lx + dx, 12 + dy); ctx.stroke();
+  }
+  ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(-55, -6); ctx.quadraticCurveTo(-86, -20, -78, -44); ctx.stroke();
+  ctx.fillStyle = px(C_TIGER);
+  ctx.beginPath(); ctx.arc(60, -10, 17, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(70, -8); ctx.lineTo(88, -2); ctx.lineTo(70, 4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = px(C_WHITE);
+  ctx.beginPath(); ctx.moveTo(70, -4); ctx.lineTo(83, -1); ctx.lineTo(70, 1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = px(C_TIGER);
+  ctx.beginPath(); ctx.moveTo(52, -24); ctx.lineTo(57, -34); ctx.lineTo(63, -24); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = px(C_STRIPE);
+  ctx.beginPath(); ctx.arc(63, -14, 2.6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = px(C_STRIPE); ctx.lineWidth = 4; ctx.lineCap = 'round';
+  for (let i = -4; i <= 4; i++) {
+    const sx = i * 11;
+    ctx.beginPath();
+    ctx.moveTo(sx, -20 + Math.abs(i));
+    ctx.quadraticCurveTo(sx - 4, 0, sx, 16 - Math.abs(i));
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,246,227,0.85)';
+  ctx.beginPath(); ctx.ellipse(4, 14, 40, 7, 0, 0, Math.PI); ctx.fill();
+  ctx.restore();
+}
+
+function drawTigerTympanum(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number,
+) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = '#caa45c'; ctx.fillRect(x, y, w, h);
+  const rnd = makeLcg(31);
+  for (let i = 0; i < 60; i++) {
+    const fx = x + rnd() * w, fy = y + rnd() * h;
+    ctx.strokeStyle = 'rgba(30,95,168,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(fx, fy, 7 + rnd() * 8, rnd() * 6, rnd() * 6 + 2.2); ctx.stroke();
+    ctx.fillStyle = rnd() > 0.5 ? px(C_TURQUOISE) : px(C_COBALT);
+    ctx.beginPath(); ctx.arc(fx, fy, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
+  const sc = h / 280;
+  portalDrawTiger(ctx, x + w * 0.155, y + h * 0.58, sc,  1);
+  portalDrawTiger(ctx, x + w * 0.845, y + h * 0.58, sc, -1);
+  ctx.restore();
+}
+
+/** Tilya-Kori: gilt rosettes and arabesque scrollwork on cobalt. Seeded. */
+function drawGoldTympanum(
+  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number,
+) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = px(C_COBALT); ctx.fillRect(x, y, w, h);
+  const rnd = makeLcg(5);
+  ctx.strokeStyle = 'rgba(217,181,69,0.85)';
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 26; i++) {
+    const fx = x + rnd() * w, fy = y + rnd() * h, r = 10 + rnd() * 22;
+    ctx.beginPath(); ctx.arc(fx, fy, r, rnd() * 6, rnd() * 6 + 3.5); ctx.stroke();
+  }
+  const rosette = (cx: number, cy: number, R: number) => {
+    ctx.fillStyle = px(C_GOLD);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.ellipse(cx + Math.cos(a) * R * 0.6, cy + Math.sin(a) * R * 0.6, R * 0.34, R * 0.18, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = px(C_TURQUOISE_HI);
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.30, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = px(C_GOLD);
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.13, 0, Math.PI * 2); ctx.fill();
+  };
+  rosette(x + w * 0.5,  y + h * 0.42, h * 0.34);
+  rosette(x + w * 0.18, y + h * 0.6,  h * 0.2);
+  rosette(x + w * 0.82, y + h * 0.6,  h * 0.2);
+  for (let i = 0; i < 7; i++) rosette(x + (0.08 + rnd() * 0.84) * w, y + (0.12 + rnd() * 0.2) * h, h * 0.08);
+  ctx.restore();
+}
+
+export type PortalVariant = 'ulughbeg' | 'sherdor' | 'tilyakori';
+
+const TYMPANUM_BY_VARIANT: Record<PortalVariant, (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void> = {
+  ulughbeg:  drawStarsTympanum,
+  sherdor:   drawTigerTympanum,
+  tilyakori: drawGoldTympanum,
+};
+
+/**
+ * Front face of the great portal screen.
+ * Proportions: aw=0.55w, spring=0.42h, apex=0.74h.
+ * All coords are relative to (w,h) so the draw closure is resolution-independent.
+ * Priority=true → 2x re-rasterization on zoom-in.
+ */
+export function portalTexture(variant: PortalVariant, wM: number, hM: number): THREE.CanvasTexture {
+  const W = 1024, H = Math.round(W * hM / wM);
+
+  function draw(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.fillStyle = px(C_COBALT); ctx.fillRect(0, 0, w, h);
+    // outer gilt rim
+    ctx.fillStyle = px(C_GOLD); ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = px(C_COBALT); ctx.fillRect(w * 0.012, h * 0.008, w * 0.976, h);
+
+    // girih bands left/top/right
+    const band = w * 0.115;
+    portalDrawGirihBand(ctx, w * 0.02, h * 0.015, band, h - h * 0.015, true);
+    portalDrawGirihBand(ctx, w - w * 0.02 - band, h * 0.015, band, h - h * 0.015, true);
+    portalDrawGirihBand(ctx, w * 0.02 + band, h * 0.015, w - (w * 0.02 + band) * 2, band * 0.8, false);
+
+    // calligraphy strip under top band
+    portalDrawKuficBand(ctx, w * 0.02 + band, h * 0.015 + band * 0.8, w - (w * 0.02 + band) * 2, band * 0.5, variant.length);
+
+    // arch geometry in canvas space (y=0 = top, y=h = bottom / arch base)
+    const aw = w * 0.55;
+    const springY = h * (1 - 0.42);
+    const apexY   = h * (1 - 0.74);
+
+    // square-kufic tile fields flanking the arch
+    const fieldX0 = w * 0.02 + band, fieldW = w * 0.092;
+    portalDrawSquareKufic(ctx, fieldX0, springY, fieldW, h - springY);
+    portalDrawSquareKufic(ctx, w - fieldX0 - fieldW, springY, fieldW, h - springY, px(C_TURQUOISE_HI));
+
+    // tympanum mosaic — per-variant signature art
+    const tymTop = h * 0.075 + band * 1.3;
+    TYMPANUM_BY_VARIANT[variant](ctx, w * 0.02 + band, tymTop, w - (w * 0.02 + band) * 2, apexY - tymTop + h * 0.10);
+
+    // inscription frame hugging the arch
+    const insW = w * 0.045;
+    const insTop = apexY - h * 0.02 - insW * 1.4;
+    portalDrawKuficBandV(ctx, w / 2 - aw / 2 - w * 0.025 - insW, insTop + insW * 1.4, insW, h - insTop - insW * 1.4, 11);
+    portalDrawKuficBandV(ctx, w / 2 + aw / 2 + w * 0.025,         insTop + insW * 1.4, insW, h - insTop - insW * 1.4, 12);
+    portalDrawKuficBand(ctx, w / 2 - aw / 2 - w * 0.025 - insW, insTop, aw + w * 0.05 + insW * 2, insW * 1.4, 13);
+
+    // turquoise + gold archivolt rings
+    portalArchPath(ctx, w / 2, h, aw + w * 0.05, springY, apexY - h * 0.018);
+    ctx.fillStyle = px(C_TURQUOISE); ctx.fill();
+    portalArchPath(ctx, w / 2, h, aw + w * 0.022, springY, apexY - h * 0.008);
+    ctx.fillStyle = px(C_GOLD); ctx.fill();
+
+    // dark arch opening (painted as backup; real hole cut by geometry)
+    portalArchPath(ctx, w / 2, h, aw, springY, apexY);
+    ctx.fillStyle = px(C_NIGHT); ctx.fill();
+  }
+
+  const [cv, g] = canvas(W, H, C_COBALT, draw, true);
+  draw(g, W, H);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1 / wM, 1 / hM);
+  t.offset.set(0.5, 0);
+  t.anisotropy = 8;
+  textureRegistry.addTexture(cv, t);
+  return t;
+}
+
+/**
+ * Back wall of the recessed iwan: tympanum panel + star dado + double door.
+ * Priority=true → 2x re-rasterization on zoom.
+ */
+export function iwanTexture(variant: PortalVariant): THREE.CanvasTexture {
+  const W = 768, H = 1024;
+
+  function draw(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.fillStyle = px(C_COBALT_DARK); ctx.fillRect(0, 0, w, h);
+    TYMPANUM_BY_VARIANT[variant](ctx, w * 0.06, h * 0.05, w * 0.88, h * 0.42);
+    ctx.strokeStyle = px(C_GOLD); ctx.lineWidth = 8;
+    ctx.strokeRect(w * 0.06, h * 0.05, w * 0.88, h * 0.42);
+    // star dado
+    for (let i = 0; i < 5; i++)
+      for (let j = 0; j < 3; j++)
+        portalStar8(ctx, w * (0.12 + i * 0.19), h * (0.55 + j * 0.13), w * 0.045,
+          (i + j) % 2 ? px(C_TURQUOISE) : px(C_WHITE));
+    // carved double door under gilt arch frame
+    const dw = w * 0.34, dx = (w - dw) / 2;
+    ctx.fillStyle = px(C_GOLD);
+    ctx.fillRect(dx - w * 0.025, h * 0.62, dw + w * 0.05, h * 0.38);
+    portalArchPath(ctx, w / 2, h, dw, h * 0.78, h * 0.66);
+    ctx.fillStyle = '#3a2a16'; ctx.fill();
+    ctx.strokeStyle = '#1f1609'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(w / 2, h * 0.70); ctx.lineTo(w / 2, h); ctx.stroke();
+    for (let j = 0; j < 4; j++) {
+      ctx.strokeRect(dx + dw * 0.08, h * (0.74 + j * 0.062), dw * 0.34, h * 0.05);
+      ctx.strokeRect(dx + dw * 0.58, h * (0.74 + j * 0.062), dw * 0.34, h * 0.05);
+    }
+  }
+
+  const [cv, g] = canvas(W, H, C_COBALT_DARK, draw, true);
+  draw(g, W, H);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = 8;
+  textureRegistry.addTexture(cv, t);
+  return t;
+}
+
+/**
+ * Rope-column texture: 45° seamless stripes (sand/cobalt/sand/turquoise).
+ * Wraps into a spiral when applied to a cylinder.
+ */
+export function ropeTexture(): THREE.CanvasTexture {
+  const S = 256;
+
+  function draw(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const cols = [px(C_SAND), px(C_COBALT), px(C_SAND), px(C_TURQUOISE)];
+    const period = w / 4;
+    ctx.lineWidth = period / Math.SQRT2 + 1;
+    for (let c = -w; c < 2 * w + h; c += period) {
+      ctx.strokeStyle = cols[(((c / period) % 4) + 4) % 4];
+      ctx.beginPath();
+      ctx.moveTo(c + h,     -h);
+      ctx.lineTo(c - 2 * h,  2 * h);
+      ctx.stroke();
+    }
+  }
+
+  const [cv, g] = canvas(S, S, C_SAND, draw, false);
+  draw(g, S, S);
+  return toTexture(cv);
 }

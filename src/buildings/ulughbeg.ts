@@ -5,6 +5,7 @@ export function ulughBeg() {
     facadeLen: 18,
     portal: { w: 8, h: 15, d: 5 },
     wingH: 7,
+    variant: 'ulughbeg',
     minarets: [{ offset: -10, h: 17 }, { offset: 10, h: 17 }],
     wingStyle: 'diagonal-lattice', // UB: star-accent diagonal lattice (default)
   });

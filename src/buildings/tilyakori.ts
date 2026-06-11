@@ -5,6 +5,7 @@ export function tilyaKori() {
     facadeLen: 26,
     portal: { w: 8, h: 13, d: 5 },
     wingH: 6,
+    variant: 'tilyakori',
     // Grand smooth dome: r=3.8 for visible dominance (large bright-turquoise onion)
     domes: [{ offset: -7, r: 3.8 }],
     // Small corner turrets at facade ends (tilyakori-facade.jpg: round towers with small domes)

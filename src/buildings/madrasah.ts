@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { pishtaq, arcadeWall, minaret, dome, shadowed } from './primitives';
 import { C } from '../palette';
-import { bannai } from '../patterns/textures';
+import { bannai, type PortalVariant } from '../patterns/textures';
 
 export interface MadrasahOpts {
   facadeLen: number;        // total width along its plaza edge
@@ -9,8 +9,13 @@ export interface MadrasahOpts {
   wingH: number;
   minarets?: { offset: number; h: number }[];
   domes?: { offset: number; r: number; ribbed?: boolean }[];
-  /** Pass 'tigers' to render twin mirrored Sher-Dor tiger spandrel panels */
-  decals?: 'tigers';
+  /**
+   * Portal tympanum + texture variant.
+   * 'ulughbeg'  → girih star constellation tympanum
+   * 'sherdor'   → tiger + doe + human-faced sun tympanum
+   * 'tilyakori' → gold rosette/arabesque tympanum
+   */
+  variant?: PortalVariant;
   /** Corner turrets at facade ends — patterned cylinder + small dome cap */
   turrets?: { offset: number; h: number; r: number }[];
   /** Wing texture identity: 'diagonal-lattice'(default/UB) | 'meander'(SD) | 'arch-floral'(TK) */
@@ -77,7 +82,7 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   raised.position.y = plinthH;
 
   const portal = pishtaq(o.portal.w, o.portal.h, o.portal.d, {
-    decals: o.decals,
+    variant: o.variant,
   });
   raised.add(portal);
 
