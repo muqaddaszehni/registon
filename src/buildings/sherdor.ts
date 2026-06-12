@@ -5,8 +5,8 @@ export function sherDor() {
     facadeLen: 18,
     portal: { w: 8, h: 15, d: 5 },
     wingH: 7,
-    minarets: [{ offset: -10, h: 17 }, { offset: 10, h: 17 }],
-    domes: [{ offset: -6, r: 2.2, ribbed: true }, { offset: 6, r: 2.2, ribbed: true }],
+    minarets: [{ offset: -10.8, h: 17 }, { offset: 10.8, h: 17 }],
+    domes: [{ offset: -5, r: 2.2, ribbed: true }, { offset: 5, r: 2.2, ribbed: true }],
     variant: 'sherdor',
     wingStyle: 'meander', // SD: cobalt/cream swastika-meander dominant
   });

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { bannai, archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
+import { archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
 import { textureRegistry } from '../scene/lod';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -141,6 +141,7 @@ export function pishtaq(
   );
   // Front face at frontZ; ExtrudeGeometry extrudes in +Z, so shift back
   screen.position.set(0, 0, frontZ - screenDepth);
+  screen.renderOrder = 1;
   g.add(screen);
 
   // ── TELESCOPING INNER ARCH (40% into iwan) ──────────────────────
@@ -196,23 +197,27 @@ export function pishtaq(
   }
 
   // ── IWAN FLOOR ────────────────────────────────────────────────────
+  // Recess depth = iwanDepth - screenDepth (behind the screen slab only).
+  // Z center = frontZ - screenDepth/2 - iwanDepth/2.
+  const recessDepth = iwanDepth - screenDepth;
+  const recessZCenter = frontZ - screenDepth / 2 - iwanDepth / 2;
   const floorMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(aw + 0.4, 0.12, iwanDepth),
+    new THREE.BoxGeometry(aw + 0.4, 0.12, recessDepth),
     mat(C.sandDark),
   );
-  floorMesh.position.set(0, 0.06, frontZ - iwanDepth / 2);
+  floorMesh.position.set(0, 0.06, recessZCenter);
   g.add(floorMesh);
 
   // ── IWAN SIDE WALLS ───────────────────────────────────────────────
-  // Full height: from floor to screen top (h), not just to apex.
-  // This closes the hollow zone above apex between screen and iwan back.
+  // Height: apex + 0.4 so walls match back wall + vault extents.
+  const sideWallH = apex + 0.4;
   const sideTileMat = new THREE.MeshLambertMaterial({ color: C.lapis });
   for (const sgn of [-1, 1] as const) {
     const sw = new THREE.Mesh(
-      new THREE.PlaneGeometry(iwanDepth, h),
+      new THREE.PlaneGeometry(recessDepth, sideWallH),
       sideTileMat,
     );
-    sw.position.set(sgn * (aw / 2 + 0.2), h / 2, frontZ - iwanDepth / 2);
+    sw.position.set(sgn * (aw / 2 + 0.2), sideWallH / 2, recessZCenter);
     sw.rotation.y = -sgn * Math.PI / 2;
     g.add(sw);
   }
@@ -220,25 +225,23 @@ export function pishtaq(
   // ── IWAN VAULT (ceiling) ──────────────────────────────────────────
   // At apex height (arch interior ceiling).
   const vaultMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(aw + 0.4, iwanDepth),
+    new THREE.PlaneGeometry(aw + 0.4, recessDepth),
     sideTileMat,
   );
-  vaultMesh.position.set(0, apex + 0.2, frontZ - iwanDepth / 2);
+  vaultMesh.position.set(0, apex + 0.2, recessZCenter);
   vaultMesh.rotation.x = Math.PI / 2;
   g.add(vaultMesh);
 
   // ── CORNICE CAP SLAB (roof the pishtaq top) ───────────────────────
-  // Solid slab spanning full portal width + slight overhang, sitting at
-  // screen top height (h). Depth spans from screen back face to iwan back.
-  // This closes the top so no camera angle sees a hollow shell above the arch.
-  const capSlabDepth = iwanDepth + screenDepth + 0.3; // screen depth + iwan + small overhang
+  // Depth = iwanDepth + 0.15; back edge flush with iwan back (backZ).
+  // Center Z = backZ + capSlabDepth/2.
+  // Sits on screen/pylon tops: center Y = h + 0.25.
+  const capSlabDepth = iwanDepth + 0.15;
   const capSlab = new THREE.Mesh(
     new THREE.BoxGeometry(w + 0.6, 0.5, capSlabDepth),
     mat(C.sandDark),
   );
-  // Top of slab at y = h + 0.5; center at h + 0.25
-  // Z center: screen front at frontZ, slab extends back to backZ - 0.15
-  capSlab.position.set(0, h + 0.25, frontZ - capSlabDepth / 2 + 0.15);
+  capSlab.position.set(0, h + 0.25, backZ + capSlabDepth / 2);
   g.add(capSlab);
 
   // ── IWAN BACK WALL (rich mosaic texture) ──────────────────────────
@@ -253,14 +256,6 @@ export function pishtaq(
   );
   backWall.position.set(0, (apex + 0.4) / 2, backZ + 0.07);
   g.add(backWall);
-
-  // ── REAR SEALING WALL (behind portal at back face) ─────────────────
-  const rearWall = patternedBoxMulti(aw + 0.4, apex, 0.22, C.sand, {
-    nz: bannai(C.sand, C.cream, C.cobalt),
-    pz: bannai(C.sand, C.cream, C.cobalt),
-  });
-  rearWall.position.set(0, apex / 2, -(frontZ - 0.11));
-  g.add(rearWall);
 
   return g;
 }

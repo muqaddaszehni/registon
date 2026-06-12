@@ -6,7 +6,7 @@ export function ulughBeg() {
     portal: { w: 8, h: 15, d: 5 },
     wingH: 7,
     variant: 'ulughbeg',
-    minarets: [{ offset: -10, h: 17 }, { offset: 10, h: 17 }],
+    minarets: [{ offset: -10.8, h: 17 }, { offset: 10.8, h: 17 }],
     wingStyle: 'diagonal-lattice', // UB: star-accent diagonal lattice (default)
   });
   g.rotation.y = Math.PI / 2;   // front faces +X → east

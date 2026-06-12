@@ -8,11 +8,11 @@ export function tilyaKori() {
     variant: 'tilyakori',
     goldTrim: true,
     // Grand smooth dome: r=3.8 for visible dominance (large bright-turquoise onion)
-    domes: [{ offset: -7, r: 3.8 }],
+    domes: [{ offset: -9, r: 3.8 }],
     // Small corner turrets at facade ends (tilyakori-facade.jpg: round towers with small domes)
     turrets: [
-      { offset: -13.5, h: 7, r: 0.9 },
-      { offset:  13.5, h: 7, r: 0.9 },
+      { offset: -14.1, h: 7, r: 0.9 },
+      { offset:  14.1, h: 7, r: 0.9 },
     ],
     wingStyle: 'arch-floral', // TK: gold-accent floral (warm, floral-ish identity)
   });

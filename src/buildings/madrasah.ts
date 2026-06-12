@@ -35,12 +35,15 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   const totalD = o.totalDepth    ?? 9.0;
   const wingT  = o.wingThickness ?? 2.0;
   const frontD = o.portal.d;           // front wing depth = portal depth (d=5, so frontD=5)
-  const sideLen = totalD - frontD;     // side wings Z span = 9 - 5 = 4  (NOTE: frontD=portal.d=5, not 2.5)
+  // Side wings butt against back wing inner face (fix 4):
+  // sideLen = totalD - frontD - wingT so side wings end exactly at back wing's courtyard face.
+  const sideLen = totalD - frontD - wingT; // = 9 - 5 - 2 = 2
   const sideH   = o.wingH * 0.87;     // courtyard wings slightly shorter
-  // Front wing center: local Z=0; front face at +frontD/2; back face at -frontD/2
-  // Side wings run from z=-frontD/2 back to z=-(frontD/2+sideLen)
+  // Front wing back face at -frontD/2; side wings go from there to back wing inner face.
+  // sideZCenter = -(frontD/2 + sideLen/2)
   const sideZCenter  = -(frontD / 2 + sideLen / 2);
-  const backZCenter  = -(frontD / 2 + sideLen - wingT / 2);
+  // backZCenter: back wing inner face at -(frontD/2 + sideLen), back wing center is further by wingT/2
+  const backZCenter  = -(frontD / 2 + sideLen + wingT / 2);
   const goldTrim = o.goldTrim ?? false;
 
   // ── MARBLE PLINTH ────────────────────────────────────────────────
@@ -53,9 +56,12 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   // = frontD/2 - (totalD+0.5)/2 = (frontD - totalD - 0.5) / 2
   const plinthCenterZ = (frontD - totalD - 0.5) / 2;
   const plinthMat = new THREE.MeshLambertMaterial({ color: C.marble });
-  const plinthGeo = new THREE.BoxGeometry(plinthW, plinthH, plinthD);
+  // Fix 9: sink plinth 0.05 so bottom face is inside ground (no coplanar shimmer).
+  // Height increases by 0.05 to keep top flush; center y shifts to (plinthH+0.05)/2 - 0.05.
+  const plinthActualH = plinthH + 0.05;
+  const plinthGeo = new THREE.BoxGeometry(plinthW, plinthActualH, plinthD);
   const plinth = new THREE.Mesh(plinthGeo, plinthMat);
-  plinth.position.set(0, plinthH / 2, plinthCenterZ);
+  plinth.position.set(0, plinthActualH / 2 - 0.05, plinthCenterZ);
   plinth.castShadow = true;
   plinth.receiveShadow = true;
   g.add(plinth);
@@ -92,25 +98,28 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
     extTex = brickWall(C.sand, C.cream, C.cobalt);
   }
 
-  // ── FRONT WING ──────────────────────────────────────────────────
-  // Width=facadeLen, height=wingH, depth=frontD, centered at Z=0.
-  // +Z face (plaza-facing): full arcade facade.
-  // -Z face (courtyard): interior arcade.
-  // py (roof top): no texture → plain mat(C.sand) via patternedBoxMulti default.
-  const frontArcade   = arcadeFacade(o.facadeLen, o.wingH, goldTrim);
-  const frontInterior = arcadeFacade(o.facadeLen, o.wingH, false);
-  const frontWing = patternedBoxMulti(o.facadeLen, o.wingH, frontD, C.sand, {
-    pz: frontArcade,
-    nz: frontInterior,
-    px: extTex,
-    nx: extTex,
-    // py omitted → plain sand (roof visible from top)
-  });
-  // patternedBoxMulti sets position.y = h/2 internally — only override X/Z
-  frontWing.position.z = 0;
-  raised.add(frontWing);
+  // ── FRONT WING — two flanking segments (fix 1) ──────────────────
+  // The pishtaq occupies the central portalW gap; no wing volume behind the portal.
+  // Each segment: width = (facadeLen - portalW) / 2, height = wingH, depth = frontD.
+  const portalW = o.portal.w;
+  const segW = (o.facadeLen - portalW) / 2;
+  const segXCenter = portalW / 2 + segW / 2;
+  // Each segment gets its own arcade facade scaled to segW.
+  for (const sgn of [-1, 1] as const) {
+    const segArcade   = arcadeFacade(segW, o.wingH, goldTrim);
+    const segInterior = arcadeFacade(segW, o.wingH, false);
+    const seg = patternedBoxMulti(segW, o.wingH, frontD, C.sand, {
+      pz: segArcade,
+      nz: segInterior,
+      px: extTex,
+      nx: extTex,
+    });
+    seg.position.x = sgn * segXCenter;
+    seg.position.z = 0;
+    raised.add(seg);
+  }
 
-  // ── PORTAL (pishtaq stands in front of / over the front wing) ────
+  // ── PORTAL (pishtaq stands in the central gap — no wing body behind it) ────
   const portal = pishtaq(o.portal.w, o.portal.h, o.portal.d, {
     variant: o.variant,
   });
@@ -118,7 +127,7 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
 
   // ── SIDE WINGS ──────────────────────────────────────────────────
   // Each wing: width=wingT, height=sideH, depth=sideLen.
-  // Positioned so they abut the front wing's sides and extend back.
+  // sideLen is already shortened (fix 4) so wings butt against back wing's inner face.
   // sideXCenter: outer edge at ±facadeLen/2, inner at ±(facadeLen/2 - wingT).
   // Center: ±(facadeLen/2 - wingT/2).
   const sideXCenter  = o.facadeLen / 2 - wingT / 2;
@@ -159,13 +168,11 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   // ── COURTYARD FLOOR ─────────────────────────────────────────────
   // Fills the open courtyard between the four wings.
   // Width: facadeLen - 2*wingT (between inner faces of side wings).
-  // Depth: sideLen - wingT (between back face of front wing and front face of back wing).
+  // Depth: sideLen (from front wing back face to back wing inner face — side wings now butt flush).
   const courtW = o.facadeLen - 2 * wingT;
-  const courtDepth = sideLen - wingT;
-  // Z center of courtyard: start at -frontD/2 (front wing back face),
-  // end at -(frontD/2 + sideLen - wingT) (back wing front face).
-  // Center: -(frontD/2 + (sideLen - wingT)/2)
-  const courtZCenter = -(frontD / 2 + (sideLen - wingT) / 2);
+  const courtDepth = sideLen;
+  // Z center: midpoint between front wing back (-frontD/2) and back wing inner face (-(frontD/2+sideLen))
+  const courtZCenter = -(frontD / 2 + sideLen / 2);
   const courtFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(courtW, courtDepth),
     new THREE.MeshLambertMaterial({
