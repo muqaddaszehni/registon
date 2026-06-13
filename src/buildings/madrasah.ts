@@ -89,9 +89,13 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   raised.position.y = plinthH;
 
   // Exterior brick texture (per wingStyle)
+  // 'meander' (SD): buff/sand field with cobalt outer diamond, turquoise inner accent —
+  // warm 70/30 buff/blue economy matching ref photo (warm stone + sparse blue geometric tracery).
+  // brickWall(bg, line, motif): line=inner, motif=outer → brickWall(sand, turquoise, cobalt)
+  // gives sand bg, cobalt outer diamond, turquoise inner square.
   let extTex: THREE.Texture;
   if (o.wingStyle === 'meander') {
-    extTex = brickWall(C.cobalt, C.cream, C.sandLight);
+    extTex = brickWall(C.sand, C.turquoise, C.cobalt);
   } else if (o.wingStyle === 'arch-floral') {
     extTex = brickWall(C.sand, C.cream, C.gold);
   } else {

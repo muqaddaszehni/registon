@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
+import { archPanel, portalTexture, iwanTexture, iwanSideTile, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
 import { textureRegistry } from '../scene/lod';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -210,8 +210,21 @@ export function pishtaq(
 
   // ── IWAN SIDE WALLS ───────────────────────────────────────────────
   // Height: apex + 0.4 so walls match back wall + vault extents.
+  // DoubleSide: PlaneGeometry back-face would be culled when camera looks in from outside;
+  // DoubleSide ensures the inner face renders regardless of camera orientation.
   const sideWallH = apex + 0.4;
-  const sideTileMat = new THREE.MeshLambertMaterial({ color: C.lapis });
+  const sideTex = iwanSideTile();
+  sideTex.wrapS = sideTex.wrapT = THREE.RepeatWrapping;
+  sideTex.repeat.set(
+    Math.max(1, Math.round(recessDepth / 3)),
+    Math.max(1, Math.round(sideWallH / 3)),
+  );
+  const sideTileMat = new THREE.MeshLambertMaterial({
+    map: sideTex,
+    side: THREE.DoubleSide,
+    emissive: new THREE.Color(0x0e2240),
+    emissiveIntensity: 0.18,
+  });
   for (const sgn of [-1, 1] as const) {
     const sw = new THREE.Mesh(
       new THREE.PlaneGeometry(recessDepth, sideWallH),
@@ -223,10 +236,22 @@ export function pishtaq(
   }
 
   // ── IWAN VAULT (ceiling) ──────────────────────────────────────────
-  // At apex height (arch interior ceiling).
+  // At apex height (arch interior ceiling). DoubleSide so it renders from below.
+  const vaultTex = iwanSideTile();
+  vaultTex.wrapS = vaultTex.wrapT = THREE.RepeatWrapping;
+  vaultTex.repeat.set(
+    Math.max(1, Math.round((aw + 0.4) / 3)),
+    Math.max(1, Math.round(recessDepth / 3)),
+  );
+  const vaultMat = new THREE.MeshLambertMaterial({
+    map: vaultTex,
+    side: THREE.DoubleSide,
+    emissive: new THREE.Color(0x0e2240),
+    emissiveIntensity: 0.18,
+  });
   const vaultMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(aw + 0.4, recessDepth),
-    sideTileMat,
+    vaultMat,
   );
   vaultMesh.position.set(0, apex + 0.2, recessZCenter);
   vaultMesh.rotation.x = Math.PI / 2;
@@ -513,9 +538,12 @@ export function arcadeWall(
   const g = new THREE.Group();
 
   // Side/back faces: upgraded brick wall with seeded tonal variation + banna'i diamonds
+  // 'meander' (SD): buff/sand field, cobalt outer diamond, turquoise inner accent —
+  // matches ref photo warm stone + sparse blue geometric tracery economy.
+  // brickWall(bg, line, motif): line=inner, motif=outer → (sand, turquoise, cobalt).
   let extTex: THREE.Texture;
   if (wingStyle === 'meander') {
-    extTex = brickWall(C.cobalt, C.cream, C.sandLight);
+    extTex = brickWall(C.sand, C.turquoise, C.cobalt);
   } else if (wingStyle === 'arch-floral') {
     extTex = brickWall(C.sand, C.cream, C.gold);
   } else {

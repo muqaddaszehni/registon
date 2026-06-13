@@ -1611,6 +1611,57 @@ export function iwanTexture(variant: PortalVariant): THREE.CanvasTexture {
 }
 
 /**
+ * Dark iwan side-wall / vault tile texture.
+ * Cobalt-dark field with faint turquoise girih diamond lattice and small gold accents.
+ * Low overall brightness so the recess reads as shadowed depth, not a lit surface.
+ * Slightly darker than the back-wall iwanTexture to push depth.
+ */
+export function iwanSideTile(): THREE.CanvasTexture {
+  const BASE = 512;
+
+  function draw(g: CanvasRenderingContext2D, S: number, _H: number) {
+    // Very dark cobalt field
+    g.fillStyle = '#0e2240'; g.fillRect(0, 0, S, S);
+
+    // Faint diagonal diamond grid (turquoise, low alpha so it reads as tilework not solid colour)
+    const cellSize = Math.round(S * 0.20); // 5 diamonds per tile
+    const lineW = Math.max(1, Math.round(S * 0.006));
+    g.strokeStyle = 'rgba(66,200,200,0.30)';
+    g.lineWidth = lineW;
+    g.lineCap = 'square';
+
+    const diag = Math.sqrt(2) * S;
+    const count = Math.ceil(diag / cellSize) + 4;
+    for (let i = -count; i < count * 2; i++) {
+      const off = i * cellSize;
+      g.beginPath(); g.moveTo(off - S, -S); g.lineTo(off + S * 2, S * 2); g.stroke();
+      g.beginPath(); g.moveTo(off + S, -S); g.lineTo(off - S, S * 2);     g.stroke();
+    }
+
+    // Small gold diamond accent at every other lattice intersection
+    const halfCell = cellSize / 2;
+    const ms = Math.round(cellSize * 0.10);
+    g.fillStyle = 'rgba(217,181,69,0.45)';
+    for (let iy = -2; iy < Math.ceil(S / halfCell) + 2; iy++) {
+      for (let ix = -2; ix < Math.ceil(S / halfCell) + 2; ix++) {
+        if ((ix + iy) % 2 !== 0) continue; // alternate intersections only
+        const cx = (ix + iy) * halfCell;
+        const cy = (iy - ix) * halfCell;
+        if (cx < -cellSize || cx > S + cellSize || cy < -cellSize || cy > S + cellSize) continue;
+        g.beginPath();
+        g.moveTo(cx, cy - ms); g.lineTo(cx + ms, cy);
+        g.lineTo(cx, cy + ms); g.lineTo(cx - ms, cy);
+        g.closePath(); g.fill();
+      }
+    }
+  }
+
+  const [cv, g] = canvas(BASE, BASE, 0x0e2240, draw, false); // lower priority — no 2x needed
+  draw(g, BASE, BASE);
+  return toTexture(cv);
+}
+
+/**
  * Rope-column texture: 45° seamless stripes (sand/cobalt/sand/turquoise).
  * Wraps into a spiral when applied to a cylinder.
  */
