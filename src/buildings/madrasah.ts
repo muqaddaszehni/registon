@@ -8,7 +8,7 @@ export interface MadrasahOpts {
   portal: { w: number; h: number; d: number };
   wingH: number;
   minarets?: { offset: number; h: number }[];
-  domes?: { offset: number; r: number; ribbed?: boolean }[];
+  domes?: { offset: number; r: number; ribbed?: boolean; z?: number; yLift?: number }[];
   /**
    * Portal tympanum + texture variant.
    * 'ulughbeg'  → girih star constellation tympanum
@@ -199,7 +199,9 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   // ── DOMES ───────────────────────────────────────────────────────
   for (const d of o.domes ?? []) {
     const dd = dome(d.r, d.ribbed);
-    dd.position.set(d.offset, o.wingH, -o.portal.d * 0.1);
+    const domeZ = d.z ?? -o.portal.d * 0.1;
+    const domeY = o.wingH + (d.yLift ?? 0);
+    dd.position.set(d.offset, domeY, domeZ);
     raised.add(dd);
   }
 
