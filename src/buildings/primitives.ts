@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { archPanel, portalTexture, iwanTexture, iwanSideTile, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
+import { archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
 import { textureRegistry } from '../scene/lod';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -209,26 +209,18 @@ export function pishtaq(
   g.add(floorMesh);
 
   // ── IWAN SIDE WALLS ───────────────────────────────────────────────
-  // Height: apex + 0.4 so walls match back wall + vault extents.
+  // Beige sandstone reveals — continuous from vault ceiling to floor.
   // DoubleSide: PlaneGeometry back-face would be culled when camera looks in from outside;
   // DoubleSide ensures the inner face renders regardless of camera orientation.
   const sideWallH = apex + 0.4;
-  const sideTex = iwanSideTile();
-  sideTex.wrapS = sideTex.wrapT = THREE.RepeatWrapping;
-  sideTex.repeat.set(
-    Math.max(1, Math.round(recessDepth / 3)),
-    Math.max(1, Math.round(sideWallH / 3)),
-  );
-  const sideTileMat = new THREE.MeshLambertMaterial({
-    map: sideTex,
+  const sideRevealMat = new THREE.MeshLambertMaterial({
+    color: C.sand,
     side: THREE.DoubleSide,
-    emissive: new THREE.Color(0x0e2240),
-    emissiveIntensity: 0.18,
   });
   for (const sgn of [-1, 1] as const) {
     const sw = new THREE.Mesh(
       new THREE.PlaneGeometry(recessDepth, sideWallH),
-      sideTileMat,
+      sideRevealMat,
     );
     sw.position.set(sgn * (aw / 2 + 0.2), sideWallH / 2, recessZCenter);
     sw.rotation.y = -sgn * Math.PI / 2;
@@ -236,18 +228,11 @@ export function pishtaq(
   }
 
   // ── IWAN VAULT (ceiling) ──────────────────────────────────────────
-  // At apex height (arch interior ceiling). DoubleSide so it renders from below.
-  const vaultTex = iwanSideTile();
-  vaultTex.wrapS = vaultTex.wrapT = THREE.RepeatWrapping;
-  vaultTex.repeat.set(
-    Math.max(1, Math.round((aw + 0.4) / 3)),
-    Math.max(1, Math.round(recessDepth / 3)),
-  );
+  // Beige sandstone ceiling — matches side reveals so the recess reads as one
+  // continuous stone niche descending from vault to floor.
   const vaultMat = new THREE.MeshLambertMaterial({
-    map: vaultTex,
+    color: C.sand,
     side: THREE.DoubleSide,
-    emissive: new THREE.Color(0x0e2240),
-    emissiveIntensity: 0.18,
   });
   const vaultMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(aw + 0.4, recessDepth),
