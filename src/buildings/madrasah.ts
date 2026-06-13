@@ -126,6 +126,7 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   // ── PORTAL (pishtaq stands in the central gap — no wing body behind it) ────
   const portal = pishtaq(o.portal.w, o.portal.h, o.portal.d, {
     variant: o.variant,
+    wingH: o.wingH,   // so pishtaq can close its sides down to the wing roof level
   });
   raised.add(portal);
 

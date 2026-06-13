@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { C } from '../palette';
-import { archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, type PortalVariant } from '../patterns/textures';
+import { archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, calligraphyBand, type PortalVariant } from '../patterns/textures';
 import { textureRegistry } from '../scene/lod';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -114,13 +114,18 @@ export function archScreenGeometry(
  *   'ulughbeg'  → girih star constellation tympanum
  *   'sherdor'   → full tiger + doe + human-faced sun tympanum
  *   'tilyakori' → gold rosette/arabesque tympanum
+ *
+ * wingH: height of the flanking lower wing segments (world units, in raised-group space).
+ *   Side walls descend from the cornice base (y=h) to y=wingH, closing the gap between the
+ *   tall portal block and the lower wing roofs.
  */
 export function pishtaq(
   w: number, h: number, d: number,
-  opts: { variant?: PortalVariant } = {},
+  opts: { variant?: PortalVariant; wingH?: number } = {},
 ): THREE.Group {
   const g = new THREE.Group();
   const variant: PortalVariant = opts.variant ?? 'ulughbeg';
+  const wingH = opts.wingH ?? 0;  // flanking wing roof height (raised-group local y)
 
   // Proportions matching reference: aw=0.55w, spring=0.42h, apex=0.74h
   const screenDepth = Math.max(0.5, d * 0.12); // thickness of screen slab
@@ -242,17 +247,85 @@ export function pishtaq(
   vaultMesh.rotation.x = Math.PI / 2;
   g.add(vaultMesh);
 
-  // ── CORNICE CAP SLAB (roof the pishtaq top) ───────────────────────
-  // Depth = iwanDepth + 0.15; back edge flush with iwan back (backZ).
-  // Center Z = backZ + capSlabDepth/2.
-  // Sits on screen/pylon tops: center Y = h + 0.25.
-  const capSlabDepth = iwanDepth + 0.15;
-  const capSlab = new THREE.Mesh(
-    new THREE.BoxGeometry(w + 0.6, 0.5, capSlabDepth),
-    mat(C.sandDark),
+  // ── MOLDED CORNICE (3-layer stepped crowning) ─────────────────────
+  // Replaces the old single cap slab with a proper Timurid-style cornice:
+  //   Layer 1 (bottom projecting lip): widest + deepest, slight overhang on screen face
+  //   Layer 2 (middle recessed band): narrower and shallower
+  //   Layer 3 (top capstone):         narrowest, thinnest
+  // All layers sit flush: bottom of layer 1 at y=h, stacking upward.
+  // Depth spans backZ to frontZ so cornice covers the full pishtaq body from above.
+  const corniceDepth = iwanDepth + 0.2;   // back-edge flush with iwan back (+0.2 overhang)
+  const corniceZCenter = backZ + corniceDepth / 2;
+
+  const sandDarkMat = mat(C.sandDark);
+  const sandMat     = mat(C.sand);
+  const sandLightMat = mat(C.sandLight);
+
+  // Layer 1: projecting lower lip — overhangs screen face by ~0.3 on each side in x
+  const lip = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.8, 0.40, corniceDepth + 0.3),
+    sandDarkMat,
   );
-  capSlab.position.set(0, h + 0.25, backZ + capSlabDepth / 2);
-  g.add(capSlab);
+  lip.position.set(0, h + 0.20, corniceZCenter - 0.15);
+  g.add(lip);
+
+  // Thin turquoise inscription frieze on the front (+Z) face of the lip
+  // Uses calligraphyBand texture (cobalt bg, white glyphs) clipped to a thin strip
+  const friezeMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.8, 0.22, 0.06),
+    (() => {
+      const tex = calligraphyBand(C.cobalt, 0xfff6e3);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(Math.max(1, Math.round((w + 0.8) / 4)), 1);
+      tex.needsUpdate = true;
+      const plain = mat(C.cobalt);
+      // +z face gets the frieze, everything else cobalt
+      return [plain, plain, plain, plain, new THREE.MeshLambertMaterial({ map: tex }), plain];
+    })(),
+  );
+  friezeMesh.position.set(0, h + 0.11, frontZ + 0.03);
+  g.add(friezeMesh);
+
+  // Layer 2: middle recessed band — sits on top of the lip
+  const midBand = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.4, 0.22, corniceDepth),
+    sandMat,
+  );
+  midBand.position.set(0, h + 0.40 + 0.11, corniceZCenter);
+  g.add(midBand);
+
+  // Layer 3: top capstone — narrowest and thinnest
+  const capstone = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.1, 0.16, corniceDepth - 0.2),
+    sandLightMat,
+  );
+  capstone.position.set(0, h + 0.40 + 0.22 + 0.08, corniceZCenter + 0.1);
+  g.add(capstone);
+
+  // ── SOLID SIDE WALLS (close the tall portal sides down to wing roofs) ──
+  // From an elevated 3/4 view, the gap between the tall portal block (h=15) and the
+  // lower wing roofs (wingH=7) exposes the open iwan interior on each side.
+  // Fix: place a solid sandstone return-face panel at x=±w/2, spanning the full
+  // portal depth (z from backZ to frontZ) at height from wingH to h.
+  // PlaneGeometry (DoubleSide) is coplanar-safe: no z-fight since wings are outside x=±w/2
+  // and the iwan side-reveals are at ±aw/2 (narrower), leaving the ±w/2 face open.
+  if (wingH < h) {
+    const sideWallHeight = h - wingH;
+    const sideWallDepth  = frontZ - backZ;          // = d (full portal depth)
+    const sideWallZCenter = (frontZ + backZ) / 2;   // midpoint of portal depth
+    const sideReturnMat = new THREE.MeshLambertMaterial({ color: C.sand, side: THREE.DoubleSide });
+    for (const sgn of [-1, 1] as const) {
+      // PlaneGeometry in the YZ plane, facing ±X.
+      const sw = new THREE.Mesh(
+        new THREE.PlaneGeometry(sideWallDepth, sideWallHeight),
+        sideReturnMat,
+      );
+      // Position at the screen edge; rotate to face outward
+      sw.position.set(sgn * w / 2, wingH + sideWallHeight / 2, sideWallZCenter);
+      sw.rotation.y = sgn > 0 ? Math.PI / 2 : -Math.PI / 2;
+      g.add(sw);
+    }
+  }
 
   // ── IWAN BACK WALL (rich mosaic texture) ──────────────────────────
   const iwanTex = iwanTexture(variant);
