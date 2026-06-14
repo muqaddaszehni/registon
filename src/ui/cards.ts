@@ -6,8 +6,8 @@ const css = `
   border-radius: 14px; padding: 20px 22px; box-shadow: 0 8px 30px rgba(42,35,80,.35);
   border-top: 6px solid #3fc1c9; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
 #ui .card.open { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-.card h3 { margin: 0 0 8px; font-size: 20px; }
-.card p { margin: 0; line-height: 1.5; font-size: 15px; }
+.card h3 { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: 0.03em; }
+.card p { margin: 0; line-height: 1.65; font-size: 16px; font-weight: 400; }
 .card .close { position: absolute; top: 8px; right: 12px; border: none; background: none;
   font-size: 20px; cursor: pointer; color: #2a2350; }
 @media (orientation: portrait) {
@@ -17,7 +17,8 @@ const css = `
   #ui .card { transition: none; }
 }
 .langtoggle { position: absolute; left: 16px; bottom: 16px; border: none; cursor: pointer;
-  background: #123a66; color: #fff3da; border-radius: 22px; padding: 10px 18px; font-size: 14px; }
+  background: #123a66; color: #fff3da; border-radius: 22px; padding: 10px 18px; font-size: 15px;
+  font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif; letter-spacing: 0.04em; }
 `;
 
 export class Cards {
