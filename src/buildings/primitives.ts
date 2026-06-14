@@ -247,6 +247,36 @@ export function pishtaq(
   vaultMesh.rotation.x = Math.PI / 2;
   g.add(vaultMesh);
 
+  // ── MUQARNAS SUGGESTION (arch soffit zone) ──────────────────────
+  // Stacked corbelled boxes along the arch soffit to suggest stalactite
+  // vaulting. Three tiers of small chamfered blocks, stepping inward
+  // from the arch face, placed at the spring zone of the arch.
+  // They sit in the iwan entrance, attached to the screen inner face.
+  const muqarnasZ = frontZ - screenDepth - 0.05; // just inside the arch
+  const muqMat = mat(C.sandDark);
+  const muqLightMat = mat(C.sandLight);
+  const TIERS = 3;
+  for (let tier = 0; tier < TIERS; tier++) {
+    const tierW = aw * (1.0 - tier * 0.16);        // each tier narrows
+    const tierH = (apex - spring) * 0.08;           // thin slab
+    const tierY = spring + (apex - spring) * (0.12 + tier * 0.24); // step up
+    const tierZ = muqarnasZ - tier * 0.12;          // step back into recess
+    const blockCount = 5 + tier * 2;                // more blocks per tier
+    const blockW = tierW / blockCount;
+    for (let bi = 0; bi < blockCount; bi++) {
+      const bx = -tierW / 2 + (bi + 0.5) * blockW;
+      const isOdd = bi % 2 === 1;
+      const blockH = isOdd ? tierH * 1.4 : tierH;   // alternate heights
+      const bMat = isOdd ? muqMat : muqLightMat;
+      const block = new THREE.Mesh(
+        new THREE.BoxGeometry(blockW * 0.82, blockH, 0.14 + tier * 0.06),
+        bMat,
+      );
+      block.position.set(bx, tierY + blockH / 2, tierZ);
+      g.add(block);
+    }
+  }
+
   // ── MOLDED CORNICE (3-layer stepped crowning) ─────────────────────
   // Replaces the old single cap slab with a proper Timurid-style cornice:
   //   Layer 1 (bottom projecting lip): widest + deepest, slight overhang on screen face
@@ -327,6 +357,43 @@ export function pishtaq(
     }
   }
 
+  // ── BASE PLINTH MOLDING ──────────────────────────────────────────
+  // A stepped skirting at the base of the portal screen — adds depth.
+  // Position: proud of the screen front face (+0.08 on front, -screenDepth+0.08 on back)
+  // to avoid any z-fight with the screen slab at y=0..0.38.
+  // Z center is at frontZ + 0.08 - screenDepth/2, ensuring front face protrudes clearly.
+  const plinthMoldingZ = frontZ - (screenDepth - 0.16) / 2;
+  const plinthMolding1 = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.6, 0.20, screenDepth + 0.16),
+    mat(C.sandDark),
+  );
+  plinthMolding1.position.set(0, 0.10, plinthMoldingZ);
+  g.add(plinthMolding1);
+
+  const plinthMolding2 = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.3, 0.12, screenDepth + 0.08),
+    mat(C.sandLight),
+  );
+  plinthMolding2.position.set(0, 0.26, frontZ - (screenDepth - 0.08) / 2);
+  g.add(plinthMolding2);
+
+  // ── SPANDREL BOSSES (proud rosette knobs in the arch spandrels) ──
+  // Small chamfered cylinders at each spandrel — raise slightly off screen face.
+  const bossR    = w * 0.028;
+  const bossHalfW = aw / 2 + w * 0.06;
+  const bossY    = (spring + apex) / 2;
+  const bossZ    = frontZ + 0.06;  // proud of screen face
+  const bossMat  = mat(C.gold);
+  for (const sgn of [-1, 1] as const) {
+    const boss = new THREE.Mesh(
+      new THREE.CylinderGeometry(bossR * 0.7, bossR, 0.10, 8),
+      bossMat,
+    );
+    boss.position.set(sgn * bossHalfW, bossY, bossZ);
+    boss.rotation.x = Math.PI / 2;
+    g.add(boss);
+  }
+
   // ── IWAN BACK WALL (rich mosaic texture) ──────────────────────────
   const iwanTex = iwanTexture(variant);
   const backWall = new THREE.Mesh(
@@ -344,7 +411,7 @@ export function pishtaq(
 }
 
 /** Bulbous turquoise dome on a patterned drum.
- *  ribbed=true  → melon-fluted dome (Sher-Dor style): 16 soft rounded lobes
+ *  ribbed=true  → melon-fluted dome (Sher-Dor style): 24 soft rounded lobes
  *                 via custom BufferGeometry with r(θ,φ) = profile(θ) * (1 + A·cos(N·φ))
  *  ribbed=false → smooth onion dome (Tilya-Kori style): tall narrow onion lathe
  */
@@ -373,7 +440,46 @@ export function dome(r: number, ribbed = false): THREE.Group {
   collar.position.y = collarY + collarH / 2;
   g.add(collar);
 
-  const capBase = collarY + collarH;
+  // ── LANTERN NICHE RING (collar-to-dome transition) ────────────────
+  // Ring of small rectangular niches around the drum top, just above the collar.
+  // Each niche is a cobalt box (surround) with a lighter recessed face.
+  // rotation.y = -a makes local +Z face radially outward.
+  const nicheCount    = ribbed ? 16 : 12;
+  const nicheBaseY    = collarY + collarH;     // y just above collar
+  const nicheRing     = drumR * 1.04;          // niche center radius (flush with collar top)
+  const nicheH        = r * 0.16;
+  const nicheArcW     = (Math.PI * 2 * nicheRing / nicheCount) * 0.72; // arc width
+  const nicheDepth    = r * 0.07;              // radial depth of niche box
+  const nichemat      = mat(C.cobalt);
+  const nicheLightMat = mat(C.sandLight);
+  for (let ni = 0; ni < nicheCount; ni++) {
+    const a = (ni / nicheCount) * Math.PI * 2;
+    const nx = Math.cos(a) * nicheRing;
+    const nz = Math.sin(a) * nicheRing;
+    // Cobalt niche surround — rotation.y = -a so +Z faces radially out
+    const surround = new THREE.Mesh(
+      new THREE.BoxGeometry(nicheArcW, nicheH, nicheDepth),
+      nichemat,
+    );
+    surround.position.set(nx, nicheBaseY + nicheH / 2, nz);
+    surround.rotation.y = -a;
+    g.add(surround);
+    // Light inner face (slightly recessed, smaller, sits on outer face center)
+    const inner = new THREE.Mesh(
+      new THREE.BoxGeometry(nicheArcW * 0.60, nicheH * 0.72, 0.06),
+      nicheLightMat,
+    );
+    // Place outer face at nicheRing + nicheDepth/2, then inner is at same Z but pulled in a bit
+    inner.position.set(
+      Math.cos(a) * (nicheRing + nicheDepth / 2 + 0.04),
+      nicheBaseY + nicheH * 0.4,
+      Math.sin(a) * (nicheRing + nicheDepth / 2 + 0.04),
+    );
+    inner.rotation.y = -a;
+    g.add(inner);
+  }
+
+  const capBase = collarY + collarH + nicheH * 0.6;  // dome sits slightly above lantern niches
 
   // ── SHARED ONION PROFILE ──────────────────────────────────────────
   // Piecewise-linear control points: (t, radius).
@@ -409,12 +515,13 @@ export function dome(r: number, ribbed = false): THREE.Group {
   if (ribbed) {
     // ── MELON-FLUTED CAP via BufferGeometry with stripe texture ────────
     // Geometry: r(θ,φ) = profile(θ) * (1 + A·cos(N·φ)) — scalloped surface.
+    // 24 lobes (up from 16) for finer, crisper fluting matching refs.
     // Texture: vertical dark stripes at lobe valleys make ribs visible regardless
     // of lighting (critical because hemisphere lighting washes out geometry shading).
-    const LOBES = 16;
-    const AMP_MAX = 0.18;  // 18% scallop — visible geometry + texture stripe combo
-    const RINGS = 32;
-    const SEGS  = LOBES * 8; // 128 azimuthal segs — smooth geometry
+    const LOBES = 24;
+    const AMP_MAX = 0.16;  // 16% scallop — slightly less than before to keep profile clean
+    const RINGS = 36;
+    const SEGS  = LOBES * 6; // 144 azimuthal segs — smooth geometry
 
     // Build stripe texture: LOBES dark channels on turquoise
     const stripeCanvas = document.createElement('canvas');
@@ -426,13 +533,13 @@ export function dome(r: number, ribbed = false): THREE.Group {
     // Dark valley stripes (N stripes across U=0..1)
     for (let i = 0; i < LOBES; i++) {
       const cx = (i + 0.5) / LOBES * 512;  // centre of each stripe
-      const sw = 512 / LOBES * 0.28;         // stripe width: 28% of lobe pitch
+      const sw = 512 / LOBES * 0.26;         // stripe width: 26% of lobe pitch (slightly thinner for more lobes)
       // Dark teal valley
       sg.fillStyle = '#1a8080';
       sg.fillRect(cx - sw / 2, 0, sw, 256);
       // Lighter highlight on ridge peak (halfway between valleys)
       const px2 = ((i + 1.0) / LOBES) * 512;
-      const hw = sw * 0.5;
+      const hw = sw * 0.45;
       sg.fillStyle = '#5ae0e0';
       sg.fillRect(px2 - hw / 2, 0, hw, 256);
     }
@@ -492,9 +599,26 @@ export function dome(r: number, ribbed = false): THREE.Group {
     cap.position.y = capBase;
     g.add(cap);
 
+    // Gold finial sphere + crescent
+    const finialBase = capBase + capH + r * 0.06;
     const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 8, 8), mat(C.gold));
-    finial.position.y = capBase + capH + r * 0.06;
+    finial.position.y = finialBase;
     g.add(finial);
+    // Crescent: two overlapping spheres (outer minus inner) approximated
+    // by a torus-arc-like curved ring of small boxes
+    const crescentR = r * 0.055;
+    const crescentY = finialBase + r * 0.10;
+    const crescentMat = mat(C.gold);
+    const crescentPts = 6;
+    for (let ci = 0; ci < crescentPts; ci++) {
+      const a = Math.PI * 0.25 + (ci / (crescentPts - 1)) * Math.PI * 1.5;
+      const cx = Math.cos(a) * crescentR;
+      const cy = Math.sin(a) * crescentR * 0.55;
+      const cSize = crescentR * (0.18 + Math.sin(ci / (crescentPts - 1) * Math.PI) * 0.10);
+      const cBlock = new THREE.Mesh(new THREE.BoxGeometry(cSize, cSize, cSize * 0.5), crescentMat);
+      cBlock.position.set(cx, crescentY + cy, 0);
+      g.add(cBlock);
+    }
 
   } else {
     // ── SMOOTH ONION CAP (TK grand dome) via LatheGeometry ───────────
@@ -514,15 +638,31 @@ export function dome(r: number, ribbed = false): THREE.Group {
     cap.position.y = capBase;
     g.add(cap);
 
+    // Gold finial sphere + crescent for smooth dome too
+    const finialBase = capBase + capH + r * 0.06;
     const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 8, 8), mat(C.gold));
-    finial.position.y = capBase + capH + r * 0.06;
+    finial.position.y = finialBase;
     g.add(finial);
+    // Crescent for smooth dome (slightly larger)
+    const crescentR2 = r * 0.07;
+    const crescentY2 = finialBase + r * 0.12;
+    const crescentMat2 = mat(C.gold);
+    const crescentPts2 = 6;
+    for (let ci = 0; ci < crescentPts2; ci++) {
+      const a = Math.PI * 0.25 + (ci / (crescentPts2 - 1)) * Math.PI * 1.5;
+      const cx = Math.cos(a) * crescentR2;
+      const cy = Math.sin(a) * crescentR2 * 0.55;
+      const cSize = crescentR2 * (0.18 + Math.sin(ci / (crescentPts2 - 1) * Math.PI) * 0.10);
+      const cBlock = new THREE.Mesh(new THREE.BoxGeometry(cSize, cSize, cSize * 0.5), crescentMat2);
+      cBlock.position.set(cx, crescentY2 + cy, 0);
+      g.add(cBlock);
+    }
   }
 
   return g;
 }
 
-/** Tapered minaret with bannai shaft, corbel cornice rings, gallery, and buff dome cap. */
+/** Tapered minaret with bannai shaft, corbel cornice rings, balcony gallery (sharafa), and buff dome cap. */
 export function minaret(h: number): THREE.Group {
   const g = new THREE.Group();
 
@@ -536,6 +676,45 @@ export function minaret(h: number): THREE.Group {
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBase, shaftH, 16), shaftMat);
   shaft.position.y = shaftH / 2;
   g.add(shaft);
+
+  // ── MID-SHAFT SHARAFA (balcony ring at ~55% height) ──────────────
+  // The signature corbelled balcony gallery partway up — sharafa.
+  // Three corbel rings + a wider gallery band + a slim railing ring above.
+  const sharafaBase = shaftH * 0.55;
+  // Radius at sharafa height (linearly interpolated on the tapered shaft)
+  const rAtSharafa = rBase + (rTop - rBase) * 0.55;
+  // Three corbel rings stepping outward
+  const sCorbels: [number, number, number][] = [
+    [0.000, rAtSharafa * 1.08, h * 0.014],
+    [0.018, rAtSharafa * 1.18, h * 0.016],
+    [0.040, rAtSharafa * 1.30, h * 0.018],
+  ];
+  for (const [yOff, r, rh] of sCorbels) {
+    const ring = new THREE.Mesh(
+      new THREE.CylinderGeometry(r, r * 0.95, rh, 16),
+      mat(C.sandDark),
+    );
+    ring.position.y = sharafaBase + yOff * h + rh / 2;
+    g.add(ring);
+  }
+  const [sLastY, , sLastH] = sCorbels[2];
+  const sGalleryBase = sharafaBase + sLastY * h + sLastH;
+  const sGalleryR    = rAtSharafa * 1.28;
+  const sGalleryH    = h * 0.040;
+  const sGalleryTex  = archPanel(192, 96);
+  const sGallery = new THREE.Mesh(
+    new THREE.CylinderGeometry(sGalleryR, sGalleryR, sGalleryH, 16),
+    new THREE.MeshLambertMaterial({ map: sGalleryTex }),
+  );
+  sGallery.position.y = sGalleryBase + sGalleryH / 2;
+  g.add(sGallery);
+  // Slim railing ring above gallery
+  const sRailing = new THREE.Mesh(
+    new THREE.CylinderGeometry(sGalleryR * 1.04, sGalleryR, h * 0.010, 16),
+    mat(C.cream),
+  );
+  sRailing.position.y = sGalleryBase + sGalleryH + h * 0.005;
+  g.add(sRailing);
 
   // ── CORBEL CORNICE (3 stacking rings, widening outward) ──────────
   const corniceBase = shaftH;
@@ -567,8 +746,16 @@ export function minaret(h: number): THREE.Group {
   gallery.position.y = galleryBase + galleryH / 2;
   g.add(gallery);
 
+  // ── CROWN RAILING (slim ring above gallery, just below cap) ──────
+  const crownRailing = new THREE.Mesh(
+    new THREE.CylinderGeometry(galleryR * 1.05, galleryR, h * 0.010, 16),
+    mat(C.sandLight),
+  );
+  crownRailing.position.y = galleryBase + galleryH + h * 0.005;
+  g.add(crownRailing);
+
   // ── DOME CAP (buff/sand sphere — NOT turquoise, refs show buff caps) ─
-  const capBase = galleryBase + galleryH;
+  const capBase = galleryBase + galleryH + h * 0.012;
   const capR    = galleryR * 0.80;
   const cap = new THREE.Mesh(new THREE.SphereGeometry(capR, 12, 10), mat(C.sand));
   cap.position.y = capBase + capR * 0.85;

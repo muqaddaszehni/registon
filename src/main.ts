@@ -25,6 +25,8 @@ import { Cards } from './ui/cards';
 import { addTrees } from './ambience/trees';
 import { addDoves } from './ambience/doves';
 import { addGardens } from './ambience/gardens';
+import { addLife } from './ambience/life';
+import { addMotes } from './scene/motes';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -123,6 +125,8 @@ hero.onArrive = () => {
 onTick(addTrees(scene));
 addGardens(scene);
 onTick(addDoves(scene, grid, () => hero.worldPos));
+onTick(addLife(scene));
+onTick(addMotes(scene));
 
 export { scene, camera, renderer };
 (window as any).__scene = scene;

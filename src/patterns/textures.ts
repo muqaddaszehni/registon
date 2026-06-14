@@ -37,33 +37,56 @@ function toTexture(cv: HTMLCanvasElement, repeatX = 1, repeatY = 1): THREE.Canva
 }
 
 /**
- * Banna'i (bannai) diagonal brick lattice — the workhorse pattern.
- * 1024² tileable canvas: diagonal grid of cream lines forming diamonds,
- * with a small square-meander cross motif inside each diamond.
- * bg = field colour, line = outline colour, motif = inner accent colour.
+ * Banna'i (bannai) glazed-brick lattice — authentic square-Kufic brick calligraphy.
+ * 1024² tileable canvas. Fine buff-brick coursing underneath. Diagonal grid of
+ * glazed-cobalt bricks form geometric "brick calligraphy" angular forms.
+ * bg = buff-brick field, line = cobalt glazed brick, motif = turquoise accent.
  */
 export function bannai(bg: number, line: number, motif: number): THREE.CanvasTexture {
   const BASE = 1024;
 
   function draw(g: CanvasRenderingContext2D, S: number, _H: number) {
+    const rnd = lcgBannai(37);
     g.fillStyle = px(bg); g.fillRect(0, 0, S, S);
 
-    // Diamond cell size: one full diamond spans cellSize along each diagonal axis
-    // 256px → 4 diamonds per tile; with PATTERN_WORLD=2 → ~1 tile per 2 world units → diamond ≈ 2.5 wu
-    const cellSize = Math.round(S * 0.25); // 256/1024 = 0.25
-    const lineW = Math.max(2, Math.round(S * 0.0098)); // 10/1024 ≈ 0.0098
+    // ── Fine buff-brick coursing underneath (individual bricks visible) ────
+    const brickH = Math.round(S * 0.0195); // ~20px at 1024
+    const brickW = Math.round(S * 0.058);  // ~60px at 1024
+    g.strokeStyle = 'rgba(110,80,40,0.25)';
+    g.lineWidth = Math.max(1, Math.round(S * 0.0012));
+    for (let y = 0; y < S; y += brickH) {
+      g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
+      const row = Math.round(y / brickH);
+      const xOff = row % 2 ? 0 : brickW / 2;
+      for (let x = xOff; x < S + brickW; x += brickW) {
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + brickH); g.stroke();
+      }
+    }
 
-    // Draw diagonal grid lines: two families of lines at +45° and -45°
+    // ── Subtle tonal variation across the buff field (hand-set brick look) ─
+    for (let i = 0; i < Math.round(S * S / 4000); i++) {
+      const bx = rnd() * S, by = rnd() * S;
+      g.fillStyle = rnd() > 0.5 ? 'rgba(255,230,170,0.06)' : 'rgba(100,65,25,0.06)';
+      g.fillRect(bx, by, Math.round(S * 0.028), Math.round(S * 0.012));
+    }
+
+    // ── Glazed-brick diagonal lattice with angular Kufic forms ────────────
+    // Cell size: diamond spans cellSize along each diagonal axis
+    const cellSize = Math.round(S * 0.25); // 4 diamonds per tile
+    const halfCell = cellSize / 2;
+    // Glazed-brick line width: thicker for brick depth
+    const lineW = Math.max(3, Math.round(S * 0.014));
+
+    // Draw diagonal grid lines (glazed cobalt brick rows)
     g.strokeStyle = px(line);
     g.lineWidth = lineW;
     g.lineCap = 'square';
 
-    // We draw lines from outside the canvas to ensure coverage at edges
     const diag = Math.sqrt(2) * S;
     const step = cellSize;
     const count = Math.ceil(diag / step) + 4;
 
-    // Family 1: top-left to bottom-right (+45°) — offset along perpendicular
+    // Family 1: +45°
     for (let i = -count; i < count * 2; i++) {
       const offset = i * step;
       g.beginPath();
@@ -71,7 +94,7 @@ export function bannai(bg: number, line: number, motif: number): THREE.CanvasTex
       g.lineTo(offset + S * 2, S * 2);
       g.stroke();
     }
-    // Family 2: top-right to bottom-left (−45°)
+    // Family 2: −45°
     for (let i = -count; i < count * 2; i++) {
       const offset = i * step;
       g.beginPath();
@@ -80,20 +103,24 @@ export function bannai(bg: number, line: number, motif: number): THREE.CanvasTex
       g.stroke();
     }
 
-    // Diamond centre motif: a square rotated 45° (a smaller diamond) — covers ~25-30% of cell area
-    const halfCell = cellSize / 2;
-    const ms = Math.round(cellSize * 0.20);
-
-    g.fillStyle = px(motif);
+    // ── Angular square-Kufic motifs inside each diamond cell ─────────────
+    // Authentic banna'i: stepped cross forms + flanking bar elements
+    // that read as geometric "brick calligraphy" at distance.
+    const ms = Math.round(cellSize * 0.22);   // main cross arm half-length
+    const bw2 = Math.round(ms * 0.42);        // arm width
 
     for (let iy = -2; iy < Math.ceil(S / halfCell) + 2; iy++) {
       for (let ix = -2; ix < Math.ceil(S / halfCell) + 2; ix++) {
-        // Diamond centre in rotated grid: transform back to screen coords
         const cx = (ix + iy) * halfCell;
         const cy = (iy - ix) * halfCell;
         if (cx < -cellSize || cx > S + cellSize || cy < -cellSize || cy > S + cellSize) continue;
 
-        // Draw a small filled diamond (rotated square) as the motif
+        // Alternate cells: cobalt cross vs turquoise diamond (authentic ratio ~70/30)
+        const useTurquoise = (ix + iy) % 3 === 0;
+        const fillCol = useTurquoise ? px(motif) : px(line);
+        g.fillStyle = fillCol;
+
+        // Central diamond (rotated square) — the core kufic element
         g.beginPath();
         g.moveTo(cx,      cy - ms);
         g.lineTo(cx + ms, cy);
@@ -102,18 +129,61 @@ export function bannai(bg: number, line: number, motif: number): THREE.CanvasTex
         g.closePath();
         g.fill();
 
-        // Small accent squares at the four diagonal corners (inside the diamond cell)
-        const dotR = Math.round(ms * 0.30);
-        const dotOff = Math.round(cellSize * 0.36);
-        for (const [dx, dy] of [[dotOff, 0], [-dotOff, 0], [0, dotOff], [0, -dotOff]] as [number, number][]) {
+        // Four angular "arm" bars extending from diamond corners — stepped Kufic arms
+        const armLen = Math.round(cellSize * 0.32);
+        const armW = Math.round(bw2 * 0.85);
+        for (const [da, perpSign] of [[Math.PI / 4, 1], [3 * Math.PI / 4, -1], [5 * Math.PI / 4, 1], [7 * Math.PI / 4, -1]] as [number, number][]) {
+          const nx = Math.cos(da), ny = Math.sin(da);
+          const px2 = -ny * perpSign, py2 = nx * perpSign;
+          const startX = cx + nx * ms * 0.85;
+          const startY = cy + ny * ms * 0.85;
           g.save();
-          g.translate(cx + dx, cy + dy);
-          g.rotate(Math.PI / 4);
-          g.fillRect(-dotR / 2, -dotR / 2, dotR, dotR);
+          g.translate(startX, startY);
+          g.rotate(da + Math.PI / 4);
+          // Main arm
+          g.fillRect(-armW / 2, 0, armW, armLen * 0.55);
+          // Step notch on one side (creates the Kufic "step" appearance)
+          g.fillStyle = useTurquoise ? px(motif) : px(line);
+          g.fillRect(-armW / 2, armLen * 0.3, armW * (1 + perpSign * 0.5), armW * 0.55);
           g.restore();
+          void px2; void py2; // suppress unused warnings
         }
+
+        // Thin outline stroke for depth/crispness
+        g.strokeStyle = 'rgba(10,20,50,0.18)';
+        g.lineWidth = Math.max(1, Math.round(S * 0.0015));
+        g.beginPath();
+        g.moveTo(cx,      cy - ms);
+        g.lineTo(cx + ms, cy);
+        g.lineTo(cx,      cy + ms);
+        g.lineTo(cx - ms, cy);
+        g.closePath();
+        g.stroke();
       }
     }
+
+    // ── Subtle glaze specular streaks (hand-glazed look) ──────────────────
+    const rnd2 = lcgBannai(91);
+    g.globalAlpha = 0.07;
+    for (let i = 0; i < 18; i++) {
+      const sx = rnd2() * S, sy = rnd2() * S;
+      const len = S * (0.04 + rnd2() * 0.06);
+      const a = -Math.PI / 4 + (rnd2() - 0.5) * 0.3;
+      const grad = g.createLinearGradient(sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.strokeStyle = grad;
+      g.lineWidth = Math.max(1, Math.round(S * 0.003));
+      g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + Math.cos(a) * len, sy + Math.sin(a) * len); g.stroke();
+    }
+    g.globalAlpha = 1;
+  }
+
+  // Module-level seeded LCG for bannai (avoids closure conflict with outer lcg)
+  function lcgBannai(seed: number) {
+    let s = seed | 1;
+    return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
   }
 
   const [cv, g] = canvas(BASE, BASE, bg, draw, true);
@@ -183,107 +253,170 @@ export function meander(bg: number, fg: number): THREE.CanvasTexture {
 }
 
 /**
- * Stylized thuluth-like calligraphy band.
- * 1024×256. NOT real letters — flowing vertical strokes with varied heights and dots.
- * White on cobalt, reads as calligraphy at distance.
+ * Convincing pseudo-thuluth/kufic calligraphy band.
+ * 1024×256. Varied-weight vertical strokes with ligatures, dot clusters,
+ * baseline connectors, diamond diacritics. White on cobalt, gold frame.
  */
 export function calligraphyBand(bg: number, fg: number): THREE.CanvasTexture {
   const BASE_W = 1024, BASE_H = 256;
 
-  // Glyph data as FRACTIONS of [BASE_W, BASE_H] → scale to actual W,H at draw time
-  const glyphDataFrac: [number, number, boolean, boolean, number][] = [
-    [50/1024,  160/256, true,  false, 80/1024],
-    [80/1024,  100/256, false, true,  0],
-    [115/1024, 170/256, true,  false, 70/1024],
-    [155/1024, 120/256, false, false, 50/1024],
-    [185/1024, 150/256, true,  true,  60/1024],
-    [230/1024, 90/256,  false, false, 0],
-    [265/1024, 160/256, true,  false, 90/1024],
-    [305/1024, 130/256, false, true,  0],
-    [335/1024, 110/256, false, false, 50/1024],
-    [370/1024, 165/256, true,  false, 75/1024],
-    [420/1024, 80/256,  false, true,  0],
-    [455/1024, 155/256, true,  false, 85/1024],
-    [490/1024, 125/256, false, false, 60/1024],
-    [525/1024, 145/256, true,  true,  70/1024],
-    [570/1024, 90/256,  false, false, 0],
-    [605/1024, 165/256, true,  false, 95/1024],
-    [645/1024, 120/256, false, true,  0],
-    [675/1024, 105/256, false, false, 50/1024],
-    [710/1024, 160/256, true,  false, 80/1024],
-    [760/1024, 85/256,  false, true,  0],
-    [795/1024, 155/256, true,  false, 75/1024],
-    [830/1024, 130/256, false, false, 60/1024],
-    [860/1024, 145/256, true,  true,  70/1024],
-    [905/1024, 90/256,  false, false, 0],
-    [940/1024, 160/256, true,  false, 90/1024],
-    [975/1024, 110/256, false, true,  0],
+  // Glyph data: [xFrac, heightFrac, hasCross, hasDot, crossWFrac, dotCount, strokeWeight]
+  // strokeWeight: 1=thin, 2=medium, 3=bold — mirrors thuluth's varied-weight strokes
+  const glyphDataFrac: [number, number, boolean, boolean, number, number, number][] = [
+    [42/1024,  155/256, true,  false, 85/1024,  0, 3],
+    [75/1024,  95/256,  false, true,  0,         2, 1],
+    [108/1024, 172/256, true,  false, 72/1024,  0, 2],
+    [148/1024, 115/256, false, false, 55/1024,  1, 1],
+    [178/1024, 148/256, true,  true,  62/1024,  0, 3],
+    [222/1024, 85/256,  false, true,  0,         3, 1],
+    [255/1024, 162/256, true,  false, 92/1024,  0, 2],
+    [298/1024, 128/256, false, true,  0,         1, 1],
+    [330/1024, 108/256, false, false, 52/1024,  0, 2],
+    [365/1024, 168/256, true,  false, 78/1024,  0, 3],
+    [412/1024, 78/256,  false, true,  0,         2, 1],
+    [448/1024, 158/256, true,  false, 88/1024,  0, 2],
+    [485/1024, 122/256, false, false, 62/1024,  1, 1],
+    [520/1024, 142/256, true,  true,  72/1024,  0, 3],
+    [562/1024, 88/256,  false, false, 0,         3, 1],
+    [598/1024, 168/256, true,  false, 98/1024,  0, 2],
+    [640/1024, 118/256, false, true,  0,         1, 1],
+    [672/1024, 102/256, false, false, 52/1024,  0, 2],
+    [705/1024, 162/256, true,  false, 82/1024,  0, 3],
+    [755/1024, 82/256,  false, true,  0,         2, 1],
+    [788/1024, 155/256, true,  false, 78/1024,  0, 2],
+    [825/1024, 128/256, false, false, 62/1024,  0, 1],
+    [856/1024, 142/256, true,  true,  72/1024,  1, 3],
+    [898/1024, 88/256,  false, false, 0,         3, 1],
+    [932/1024, 162/256, true,  false, 92/1024,  0, 2],
+    [970/1024, 108/256, false, true,  0,         1, 1],
   ];
 
   function draw(g: CanvasRenderingContext2D, W: number, H: number) {
     g.fillStyle = px(bg); g.fillRect(0, 0, W, H);
 
-    // Top and bottom border stripes
-    const borderH = Math.round(H * (18 / 256));
+    // ── Gold outer frame (thin line on top and bottom edges) ───────────────
+    const goldH = Math.max(2, Math.round(H * (5 / 256)));
+    g.fillStyle = '#d9b545';
+    g.fillRect(0, 0, W, goldH);
+    g.fillRect(0, H - goldH, W, goldH);
+
+    // ── White solid top and bottom bands ──────────────────────────────────
+    const borderH = Math.round(H * (14 / 256));
     g.fillStyle = px(fg);
-    g.fillRect(0, 0, W, borderH);
-    g.fillRect(0, H - borderH, W, borderH);
+    g.fillRect(0, goldH, W, borderH);
+    g.fillRect(0, H - goldH - borderH, W, borderH);
 
-    // Inner border lines
+    // ── Inner double-rule lines ────────────────────────────────────────────
+    const ibInset = goldH + borderH + Math.round(H * (5 / 256));
     g.strokeStyle = px(fg);
-    g.lineWidth = Math.max(1, Math.round(H * (4 / 256)));
-    const ibInset = Math.round(H * (6 / 256));
-    g.strokeRect(ibInset, ibInset, W - ibInset * 2, H - ibInset * 2);
+    g.lineWidth = Math.max(1, Math.round(H * (3 / 256)));
+    g.strokeRect(ibInset * 0.5, ibInset, W - ibInset, H - ibInset * 2);
+    // Second thinner rule 4px inside
+    const rule2 = ibInset + Math.round(H * (5 / 256));
+    g.lineWidth = Math.max(1, Math.round(H * 0.006));
+    g.strokeRect(rule2 * 0.5, rule2, W - rule2, H - rule2 * 2);
 
-    const baseY = H - Math.round(H * (28 / 256)); // bottom of strokes
+    const baseY = H - Math.round(H * (32 / 256)); // baseline of strokes
+    const baseThick = Math.max(3, Math.round(H * (8 / 256)));
 
-    for (const [xFrac, hFrac, hasTopCross, hasDot, crossWFrac] of glyphDataFrac) {
+    // ── Baseline thickening (the characteristic thuluth baseline rule) ────
+    g.fillStyle = px(fg);
+    g.fillRect(ibInset * 0.5, baseY, W - ibInset, baseThick);
+
+    // ── Main glyph strokes ────────────────────────────────────────────────
+    for (const [xFrac, hFrac, hasTopCross, hasDot, crossWFrac, dotCount, strokeWeight] of glyphDataFrac) {
       const x = Math.round(xFrac * W);
       const strokeH = Math.round(hFrac * H);
       const crossW = Math.round(crossWFrac * W);
-      const sw = Math.max(4, Math.round(H * (12 / 256))); // stroke width
+      // Varied weights: thin=8px, medium=13px, bold=18px (at 256px height)
+      const swBase = [8, 13, 18][strokeWeight - 1];
+      const sw = Math.max(4, Math.round(H * (swBase / 256)));
       const topY = baseY - strokeH;
 
-      // Main vertical stroke (slightly tapered — wider at bottom)
+      // Main vertical stroke: tapered (wider base, narrow top) — thuluth style
       g.fillStyle = px(fg);
       g.beginPath();
-      g.moveTo(x - sw / 2 - 2, baseY);
-      g.lineTo(x - sw / 2, topY);
-      g.lineTo(x + sw / 2, topY);
-      g.lineTo(x + sw / 2 + 2, baseY);
+      g.moveTo(x - sw * 0.65, baseY + baseThick * 0.3);
+      g.lineTo(x - sw * 0.42, topY + sw * 0.3);
+      g.quadraticCurveTo(x - sw * 0.2, topY, x, topY - sw * 0.1);
+      g.quadraticCurveTo(x + sw * 0.2, topY, x + sw * 0.42, topY + sw * 0.3);
+      g.lineTo(x + sw * 0.65, baseY + baseThick * 0.3);
       g.closePath();
       g.fill();
 
-      // Horizontal cross at top (like alif with crossbar)
+      // Horizontal crossbar (alif head / lam ascending bar)
       if (hasTopCross && crossW > 0) {
-        const crossH = Math.max(4, Math.round(H * (10 / 256)));
-        g.fillRect(x - crossW / 2, topY - crossH, crossW, crossH);
-        // Small serifs on ends
-        const sfw = Math.max(2, Math.round(W * (8 / 1024)));
-        g.fillRect(x - crossW / 2 - sfw / 2, topY - crossH - sfw / 2, sfw, crossH + sfw / 2);
-        g.fillRect(x + crossW / 2 - sfw / 2, topY - crossH - sfw / 2, sfw, crossH + sfw / 2);
-      }
-
-      // Dot accent above stroke
-      if (hasDot) {
-        const dotR = Math.max(3, Math.round(H * (7 / 256)));
+        const crossH = Math.max(3, Math.round(H * (9 / 256)));
+        const crossY = topY - Math.round(H * (4 / 256));
+        // Main crossbar
+        g.fillRect(x - crossW / 2, crossY - crossH, crossW, crossH);
+        // Serif wedges at both ends (thuluth terminal)
+        const sfW = Math.max(2, Math.round(H * (6 / 256)));
+        const sfH = Math.max(3, Math.round(H * (10 / 256)));
         g.beginPath();
-        g.arc(x, topY - Math.round(H * (22 / 256)), dotR, 0, Math.PI * 2);
-        g.fill();
+        g.moveTo(x - crossW / 2, crossY - crossH);
+        g.lineTo(x - crossW / 2 - sfW, crossY - crossH - sfH * 0.3);
+        g.lineTo(x - crossW / 2 - sfW, crossY);
+        g.lineTo(x - crossW / 2, crossY);
+        g.closePath(); g.fill();
+        g.beginPath();
+        g.moveTo(x + crossW / 2, crossY - crossH);
+        g.lineTo(x + crossW / 2 + sfW, crossY - crossH - sfH * 0.3);
+        g.lineTo(x + crossW / 2 + sfW, crossY);
+        g.lineTo(x + crossW / 2, crossY);
+        g.closePath(); g.fill();
       }
 
-      // Curved baseline connector to next visible stroke (subtle horizontal link)
-      g.strokeStyle = px(fg);
-      g.lineWidth = Math.max(2, Math.round(H * (5 / 256)));
-      g.beginPath();
-      g.moveTo(x + sw / 2, baseY - Math.round(H * (8 / 256)));
-      g.quadraticCurveTo(
-        x + Math.round(W * (20 / 1024)),
-        baseY + Math.round(H * (4 / 256)),
-        x + Math.round(W * (34 / 1024)),
-        baseY - Math.round(H * (12 / 256)),
-      );
-      g.stroke();
+      // Dot accent above stroke (single or clustered)
+      if (hasDot || dotCount > 0) {
+        const dotR = Math.max(3, Math.round(H * (6.5 / 256)));
+        const dotY = topY - Math.round(H * (20 / 256));
+        const totalDots = hasDot ? Math.max(1, dotCount) : dotCount;
+        if (totalDots === 1) {
+          // Single dot
+          g.beginPath(); g.arc(x, dotY, dotR, 0, Math.PI * 2); g.fill();
+        } else if (totalDots === 2) {
+          // Two dots side by side
+          g.beginPath(); g.arc(x - dotR * 1.5, dotY, dotR, 0, Math.PI * 2); g.fill();
+          g.beginPath(); g.arc(x + dotR * 1.5, dotY, dotR, 0, Math.PI * 2); g.fill();
+        } else if (totalDots === 3) {
+          // Three dots triangle
+          g.beginPath(); g.arc(x, dotY - dotR * 1.2, dotR, 0, Math.PI * 2); g.fill();
+          g.beginPath(); g.arc(x - dotR * 1.5, dotY + dotR * 0.5, dotR, 0, Math.PI * 2); g.fill();
+          g.beginPath(); g.arc(x + dotR * 1.5, dotY + dotR * 0.5, dotR, 0, Math.PI * 2); g.fill();
+        }
+      }
+
+      // ── Ligature connector (curved link to adjacent glyph) ────────────
+      // Only on medium/bold strokes: a sweeping diagonal tab reaching right
+      if (strokeWeight >= 2 && crossWFrac === 0) {
+        const ligH = Math.max(3, Math.round(H * (7 / 256)));
+        const ligW = Math.round(W * (28 / 1024));
+        g.strokeStyle = px(fg);
+        g.lineWidth = ligH;
+        g.lineCap = 'round';
+        g.beginPath();
+        g.moveTo(x + sw * 0.5, baseY - Math.round(H * (10 / 256)));
+        g.quadraticCurveTo(
+          x + ligW * 0.55,
+          baseY + Math.round(H * (5 / 256)),
+          x + ligW,
+          baseY - Math.round(H * (14 / 256)),
+        );
+        g.stroke();
+      }
+
+      // ── Small diamond diacritic (vowel mark) below baseline ───────────
+      if (strokeWeight === 1 && hasTopCross) {
+        const dm = Math.max(3, Math.round(H * (5 / 256)));
+        g.fillStyle = px(fg);
+        g.beginPath();
+        g.moveTo(x,      baseY + baseThick + dm * 1.5);
+        g.lineTo(x + dm, baseY + baseThick + dm * 2.5);
+        g.lineTo(x,      baseY + baseThick + dm * 3.5);
+        g.lineTo(x - dm, baseY + baseThick + dm * 2.5);
+        g.closePath(); g.fill();
+      }
     }
   }
 
@@ -532,13 +665,30 @@ export function pylonFace(bg: number, line: number, motif: number, border: numbe
     const starR = Math.round(cellSize * 0.28); // outer star radius
     const innerStarR = Math.round(cellSize * 0.11); // inner star notch
 
-    g.fillStyle = px(motif);
+    // LCG for seeded tonal variation on tiles
+    const rndPylon = lcgPylon(73);
 
     for (let iy = -3; iy < Math.ceil(S / halfCell) + 3; iy++) {
       for (let ix = -3; ix < Math.ceil(S / halfCell) + 3; ix++) {
         const cx = (ix + iy) * halfCell;
         const cy = (iy - ix) * halfCell;
         if (cx < -cellSize || cx > S + cellSize || cy < -cellSize || cy > S + cellSize) continue;
+
+        // ── Subtle glaze tonal variation: most tiles are motif, ~8% are slightly darker/lighter ──
+        const tonalV = rndPylon();
+        let fillMotif = px(motif);
+        if (tonalV > 0.92) {
+          // Slightly darker tile (hand-glazed variation)
+          fillMotif = 'rgba(30,60,150,0.9)';
+        } else if (tonalV > 0.84) {
+          // Lighter turquoise glaze variation
+          fillMotif = '#5fe0e0';
+        } else if (tonalV > 0.97) {
+          // Very rare missing/darker tile (weathering)
+          fillMotif = 'rgba(40,40,40,0.85)';
+        }
+
+        g.fillStyle = fillMotif;
 
         // 8-pointed star: 8 outer points + 8 inner notches
         const pts = 8;
@@ -553,6 +703,32 @@ export function pylonFace(bg: number, line: number, motif: number, border: numbe
         g.closePath();
         g.fill();
 
+        // ── Specular glaze sheen streak on each star tile ──────────────────
+        const sheenA = -Math.PI * 0.3;
+        const sheenLen = starR * 0.7;
+        const sheenGrad = g.createLinearGradient(
+          cx - Math.cos(sheenA) * sheenLen * 0.4,
+          cy - Math.sin(sheenA) * sheenLen * 0.4,
+          cx + Math.cos(sheenA) * sheenLen,
+          cy + Math.sin(sheenA) * sheenLen,
+        );
+        sheenGrad.addColorStop(0, 'rgba(255,255,255,0)');
+        sheenGrad.addColorStop(0.4, 'rgba(255,255,255,0.14)');
+        sheenGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.fillStyle = sheenGrad;
+        g.beginPath();
+        for (let p = 0; p < pts * 2; p++) {
+          const a = (p * Math.PI / pts) - Math.PI / 2;
+          const r = p % 2 === 0 ? starR * 0.95 : innerStarR;
+          const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+          p === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+        }
+        g.closePath(); g.fill();
+        g.globalCompositeOperation = 'source-over';
+        g.restore();
+
         // Tiny accent square at the four cardinal notches
         const dotR = Math.round(innerStarR * 0.55);
         const dotOff = Math.round(cellSize * 0.40);
@@ -566,11 +742,32 @@ export function pylonFace(bg: number, line: number, motif: number, border: numbe
           g.restore();
         }
         g.restore();
-        g.fillStyle = px(motif);
+        g.fillStyle = fillMotif;
       }
     }
 
+    // ── Subtle glaze tonal wash over entire field ────────────────────────
+    // Turquoise/cobalt surfaces get faint tonal variation (hand-glazed look)
+    const rndWash = lcgPylon(99);
+    g.globalAlpha = 0.04;
+    for (let i = 0; i < 24; i++) {
+      const wx = rndWash() * S, wy = rndWash() * S;
+      const wr = S * (0.03 + rndWash() * 0.05);
+      const washGrad = g.createRadialGradient(wx, wy, 0, wx, wy, wr);
+      washGrad.addColorStop(0, rndWash() > 0.5 ? '#ffffff' : '#002244');
+      washGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = washGrad;
+      g.fillRect(wx - wr, wy - wr, wr * 2, wr * 2);
+    }
+    g.globalAlpha = 1;
+
     g.restore();
+  }
+
+  // Module-level seeded LCG for pylonFace
+  function lcgPylon(seed: number) {
+    let s = seed | 1;
+    return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
   }
 
   const [cv, g] = canvas(BASE, BASE, bg, draw, true);
@@ -592,25 +789,53 @@ const C_STRIPE       = 0x5a3414;
 const C_NIGHT        = 0x0d1a2e;
 const C_WHITE        = 0xfff6e3;
 
-/** 8-pointed girih star lattice: proper 8-pointed star polygon with inner/outer radii. */
+/**
+ * Girih strapwork lattice: real interlaced strap ribbons forming 8-point star
+ * rosettes with continuous outlined strap lines, connecting polygons between
+ * stars (the authentic Islamic geometric strapwork/zelli pattern).
+ * Crisp cream/white outlined ribbons over cobalt bg, turquoise/gold polygon infill.
+ */
 export function girih(bg: number, star: number, accent: number, cells = 4): THREE.CanvasTexture {
-  const S = 256;
+  // Use 512px per cell for dense crispness (priority=false so no 2x — stays manageable)
+  const CELL = 512;
+  const S = CELL * cells; // total canvas size
 
   function draw(g: CanvasRenderingContext2D, totalW: number, _totalH: number) {
-    const cellS = totalW / cells; // size per cell at current scale
+    const cellS = totalW / cells;
     g.fillStyle = px(bg); g.fillRect(0, 0, totalW, totalW);
 
-    for (let cy = 0; cy < cells; cy++) for (let cx = 0; cx < cells; cx++) {
-      const ox = cx * cellS + cellS / 2, oy = cy * cellS + cellS / 2;
-      const outerR = cellS * 0.44;
-      const innerR = cellS * 0.18;
-      const points = 8;
+    // ── Helper: draw one 8-pt star rosette cell ───────────────────────────
+    function drawStarCell(ox: number, oy: number) {
+      const outerR  = cellS * 0.44;
+      const innerR  = cellS * 0.185;
+      const strapW  = cellS * 0.075; // width of each strap ribbon
+      const strapHalf = strapW / 2;
+      const strapR  = outerR * 0.85;  // radius where ribbons emerge from star
+      const pts     = 8;
 
-      // Draw 8-pointed star with alternating outer/inner radii
+      // ─ 1. Fill polygon fields between stars with accent/infill colour ─────
+      // Between 8-pt star points the spaces are: small kite polygons (accent)
+      // and large rhombus polygons (turquoise). Draw both.
+      // Large rhombus between diagonal neighbours (turquoise)
+      g.fillStyle = px(accent);
+      for (let i = 0; i < pts; i++) {
+        const a0 = (i * Math.PI / 4) - Math.PI / 8;  // midpoint between two outer points
+        const a1 = ((i + 1) * Math.PI / 4) - Math.PI / 8;
+        const rm = cellS * 0.38; // rhombus reaches ~38% of cellS
+        g.beginPath();
+        g.moveTo(ox + Math.cos(a0) * outerR * 0.95, oy + Math.sin(a0) * outerR * 0.95);
+        g.lineTo(ox + Math.cos(a0) * rm + Math.cos(a1) * rm * 0.35, oy + Math.sin(a0) * rm + Math.sin(a1) * rm * 0.35);
+        g.lineTo(ox + Math.cos((a0 + a1) / 2) * cellS * 0.48, oy + Math.sin((a0 + a1) / 2) * cellS * 0.48);
+        g.lineTo(ox + Math.cos(a1) * rm + Math.cos(a0) * rm * 0.35, oy + Math.sin(a1) * rm + Math.sin(a0) * rm * 0.35);
+        g.closePath();
+        g.fill();
+      }
+
+      // ─ 2. Fill the 8-pt star body with star colour ────────────────────────
       g.fillStyle = px(star);
       g.beginPath();
-      for (let i = 0; i < points * 2; i++) {
-        const a = (i * Math.PI / points) - Math.PI / 2;
+      for (let i = 0; i < pts * 2; i++) {
+        const a = (i * Math.PI / pts) - Math.PI / 2;
         const r = i % 2 === 0 ? outerR : innerR;
         const x = ox + Math.cos(a) * r;
         const y = oy + Math.sin(a) * r;
@@ -619,31 +844,82 @@ export function girih(bg: number, star: number, accent: number, cells = 4): THRE
       g.closePath();
       g.fill();
 
-      // Accent small squares between star points (rotated 45°, at inner positions)
-      g.fillStyle = px(accent);
-      for (let i = 0; i < 8; i++) {
-        const a = (i * Math.PI / 4) - Math.PI / 8;
-        const midR = (outerR + innerR) * 0.5;
-        const cx2 = ox + Math.cos(a) * midR;
-        const cy2 = oy + Math.sin(a) * midR;
-        const sq = cellS * 0.07;
-        g.save();
-        g.translate(cx2, cy2);
-        g.rotate(a);
-        g.fillRect(-sq, -sq, sq * 2, sq * 2);
-        g.restore();
+      // ─ 3. Draw continuous strap ribbons emerging from star ────────────────
+      // Each of the 8 outer points has a strap ribbon that extends outward
+      // and connects to neighbours, forming the interlaced strapwork.
+      g.strokeStyle = px(star);
+      g.lineWidth = strapW;
+      g.lineCap = 'round';
+
+      for (let i = 0; i < pts; i++) {
+        const aOuter = (i * 2 * Math.PI / pts) - Math.PI / 2; // direction of outer star point
+
+        // Strap goes from the outer point toward the edge of the cell
+        const startX = ox + Math.cos(aOuter) * strapR;
+        const startY = oy + Math.sin(aOuter) * strapR;
+        const endX   = ox + Math.cos(aOuter) * cellS * 0.5;
+        const endY   = oy + Math.sin(aOuter) * cellS * 0.5;
+
+        g.beginPath();
+        g.moveTo(startX, startY);
+        g.lineTo(endX, endY);
+        g.stroke();
       }
 
-      // Small center circle in background color
-      g.fillStyle = px(bg);
+      // ─ 4. Draw crisp outlined strap lines (the interlaced strap look) ─────
+      // Outline all strap edges with a thin dark line for depth
+      g.strokeStyle = 'rgba(15,30,70,0.55)';
+      g.lineWidth = Math.max(1, strapHalf * 0.3);
+      g.lineCap = 'round';
+
+      for (let i = 0; i < pts; i++) {
+        const aOuter = (i * 2 * Math.PI / pts) - Math.PI / 2;
+        const perpA = aOuter + Math.PI / 2;
+        const startR = strapR * 0.72;
+        const endR   = cellS * 0.5;
+
+        for (const side of [-1, 1]) {
+          const offX = Math.cos(perpA) * strapHalf * side;
+          const offY = Math.sin(perpA) * strapHalf * side;
+          g.beginPath();
+          g.moveTo(ox + Math.cos(aOuter) * startR + offX, oy + Math.sin(aOuter) * startR + offY);
+          g.lineTo(ox + Math.cos(aOuter) * endR   + offX, oy + Math.sin(aOuter) * endR   + offY);
+          g.stroke();
+        }
+      }
+
+      // ─ 5. Outline the star itself ─────────────────────────────────────────
+      g.strokeStyle = 'rgba(15,30,70,0.5)';
+      g.lineWidth = Math.max(1, strapW * 0.20);
       g.beginPath();
-      g.arc(ox, oy, cellS * 0.09, 0, Math.PI * 2);
-      g.fill();
+      for (let i = 0; i < pts * 2; i++) {
+        const a = (i * Math.PI / pts) - Math.PI / 2;
+        const r = i % 2 === 0 ? outerR : innerR;
+        const x = ox + Math.cos(a) * r, y = oy + Math.sin(a) * r;
+        i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+      }
+      g.closePath(); g.stroke();
+
+      // ─ 6. Gold centre medallion ───────────────────────────────────────────
+      g.fillStyle = '#d9b545';
+      g.beginPath(); g.arc(ox, oy, cellS * 0.065, 0, Math.PI * 2); g.fill();
+      g.fillStyle = px(bg);
+      g.beginPath(); g.arc(ox, oy, cellS * 0.032, 0, Math.PI * 2); g.fill();
+    }
+
+    // Draw all cells
+    for (let cy = 0; cy < cells; cy++) {
+      for (let cx = 0; cx < cells; cx++) {
+        const ox = cx * cellS + cellS / 2;
+        const oy = cy * cellS + cellS / 2;
+        drawStarCell(ox, oy);
+      }
     }
   }
 
-  const [cv, g] = canvas(S * cells, S * cells, bg, draw, false); // priority=false: no 2x (canvas too large)
-  draw(g, S * cells, S * cells);
+  // Priority=false: no 2x (canvas is large — would be 4096² or more)
+  const [cv, g] = canvas(S, S, bg, draw, false);
+  draw(g, S, S);
   return toTexture(cv);
 }
 
@@ -702,7 +978,8 @@ function star8ctx(
   g.fill();
 }
 
-/** Blocky pseudo-kufic strip. Cobalt bg, white glyphs, gold trim lines. */
+/** Blocky pseudo-kufic strip. Cobalt bg, white glyphs, gold trim lines.
+ * Richer: varied widths, serifs, tabs, dots, baseline rule. */
 function drawKuficBandCtx(
   g: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number,
@@ -710,20 +987,61 @@ function drawKuficBandCtx(
 ) {
   g.save();
   g.fillStyle = px(REF_COBALT); g.fillRect(x, y, w, h);
-  g.fillStyle = px(REF_WHITE);
-  const rnd = lcg(seed);
-  const bw = h * 0.16;
-  for (let gx = x + h * 0.4; gx < x + w - h * 0.4; gx += h * 0.55) {
-    const tall = h * (0.45 + rnd() * 0.35);
-    g.fillRect(gx, y + h * 0.85 - tall, bw, tall);
-    if (rnd() > 0.45) g.fillRect(gx, y + h * 0.85 - bw, h * 0.38, bw);
-    if (rnd() > 0.70) g.fillRect(gx, y + h * 0.85 - tall, h * 0.3, bw);
-  }
-  // gold trim lines (always for drum; optional for parapet)
+
+  // Gold trim top + bottom
   if (goldTrim) {
     g.fillStyle = px(REF_GOLD);
     g.fillRect(x, y, w, h * 0.06);
     g.fillRect(x, y + h * 0.94, w, h * 0.06);
+    // Inner rule lines
+    g.strokeStyle = px(REF_GOLD);
+    g.lineWidth = Math.max(1, h * 0.018);
+    g.beginPath(); g.moveTo(x, y + h * 0.12); g.lineTo(x + w, y + h * 0.12); g.stroke();
+    g.beginPath(); g.moveTo(x, y + h * 0.88); g.lineTo(x + w, y + h * 0.88); g.stroke();
+  }
+
+  // Baseline rule
+  g.fillStyle = px(REF_WHITE);
+  g.fillRect(x + h * 0.2, y + h * 0.82, w - h * 0.4, Math.max(2, h * 0.030));
+
+  // Glyph strokes
+  const rnd = lcg(seed);
+  const bw = h * 0.145;
+  let gx = x + h * 0.38;
+  while (gx < x + w - h * 0.38) {
+    const wMult = rnd() > 0.6 ? 1.55 : (rnd() > 0.4 ? 1.0 : 0.72);
+    const gw = bw * wMult;
+    const tall = h * (0.40 + rnd() * 0.36);
+    const gy = y + h * 0.82 - tall;
+
+    g.fillStyle = px(REF_WHITE);
+    g.fillRect(gx, gy, gw, tall);
+
+    // Crossbar tab at top
+    if (rnd() > 0.36) {
+      const tabW = h * (0.20 + rnd() * 0.22);
+      g.fillRect(gx - tabW * 0.25, gy - h * 0.048, gw + tabW * 0.5, h * 0.048);
+    }
+
+    // Mid-height connector
+    if (rnd() > 0.58) {
+      const shelfW = h * (0.16 + rnd() * 0.25);
+      g.fillRect(gx, gy + tall * (0.28 + rnd() * 0.32), shelfW, h * 0.036);
+    }
+
+    // Dot diacritic
+    if (rnd() > 0.65 && tall > h * 0.48) {
+      const dr = Math.max(2, h * 0.042);
+      g.beginPath(); g.arc(gx + gw / 2, gy - dr * 2.1, dr, 0, Math.PI * 2); g.fill();
+    }
+
+    // Serif foot
+    if (rnd() > 0.38) {
+      const sfW = gw * 1.38;
+      g.fillRect(gx - (sfW - gw) / 2, y + h * 0.82, sfW, h * 0.030);
+    }
+
+    gx += gw + h * (0.08 + rnd() * 0.18);
   }
   g.restore();
 }
@@ -928,8 +1246,8 @@ export function arcadeFacade(wingLenM: number, wingHM: number, goldTrim = false)
 }
 
 /**
- * Brick wall with seeded tonal variation + banna'i diamond lattice.
- * Upgrade over plain `bannai`: adds visible brick coursing.
+ * Brick wall with seeded tonal variation + banna'i glazed diamond lattice.
+ * Authentic 70/30 buff-brick/blue economy. Fine coursing visible.
  * Tileable 1024².
  */
 export function brickWall(bg: number, line: number, motif: number): THREE.CanvasTexture {
@@ -939,39 +1257,68 @@ export function brickWall(bg: number, line: number, motif: number): THREE.Canvas
     const rnd = lcg(42);
     g.fillStyle = px(bg); g.fillRect(0, 0, S, S);
 
-    // Brick coursing
-    const brickH = Math.round(S * 0.031); // ~32px at 1024
-    const brickW = Math.round(S * 0.094); // ~96px at 1024
-    g.strokeStyle = 'rgba(120,90,50,0.28)'; g.lineWidth = Math.max(1, S * 0.0015);
+    // Fine buff-brick coursing (smaller bricks = more authentic masonry scale)
+    const brickH = Math.round(S * 0.022); // ~22px at 1024 — finer than before
+    const brickW = Math.round(S * 0.072); // ~74px at 1024
+    g.strokeStyle = 'rgba(110,80,40,0.22)';
+    g.lineWidth = Math.max(1, S * 0.0012);
     for (let y = 0; y < S; y += brickH) {
       g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke();
       const row = Math.round(y / brickH);
       const xOff = row % 2 ? 0 : brickW / 2;
-      for (let x = xOff; x < S; x += brickW) {
+      for (let x = xOff; x < S + brickW; x += brickW) {
         g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + brickH); g.stroke();
       }
     }
 
-    // Seeded tonal patches (not Math.random)
+    // Seeded tonal patches — buff brick variation
     const patchCount = Math.round(S * S / 3200);
     for (let i = 0; i < patchCount; i++) {
       const px2 = rnd() * S, py2 = rnd() * S;
-      g.fillStyle = rnd() > 0.5 ? 'rgba(255,235,190,0.05)' : 'rgba(90,60,30,0.05)';
+      g.fillStyle = rnd() > 0.5 ? 'rgba(255,235,190,0.055)' : 'rgba(90,60,30,0.055)';
       g.fillRect(px2, py2, Math.round(S * 0.023), Math.round(S * 0.008));
     }
 
-    // Banna'i glazed-brick diamonds (same logic as original makeWallTexture)
+    // Banna'i glazed-brick diamonds — 70/30 buff/blue economy
+    // Every 3rd cell in checkerboard gets turquoise; others get cobalt (line)
     const gsize = Math.round(S * 0.0625); // 64/1024
+    const rnd2 = lcg(57);
     for (let j = 0; j < S / gsize; j++) {
       for (let i = 0; i < S / gsize; i++) {
-        if ((i + j) % 2 === 0) continue;
+        if ((i + j) % 2 === 0) continue; // buff field cells — skip
         const cx2 = i * gsize + gsize / 2, cy2 = j * gsize + gsize / 2;
         const s2 = gsize * 0.30;
+        // Occasional turquoise (motif) vs mostly cobalt (line)
+        const useTurq = (i * 3 + j * 7) % 5 === 0;
+        const outerCol = useTurq ? px(motif) : px(line);
+        const innerCol = useTurq ? '#5fe0e0' : px(line); // turquoise hi or cobalt
+
         g.save();
         g.translate(cx2, cy2); g.rotate(Math.PI / 4);
-        g.fillStyle = px(motif); g.fillRect(-s2, -s2, s2 * 2, s2 * 2);
-        g.fillStyle = px(line);  g.fillRect(-s2 * 0.45, -s2 * 0.45, s2 * 0.9, s2 * 0.9);
+        g.fillStyle = outerCol;  g.fillRect(-s2, -s2, s2 * 2, s2 * 2);
+        g.fillStyle = innerCol;  g.fillRect(-s2 * 0.42, -s2 * 0.42, s2 * 0.84, s2 * 0.84);
         g.restore();
+
+        // Specular sheen on glazed tile
+        g.globalAlpha = 0.10;
+        const sgrad = g.createLinearGradient(cx2 - s2, cy2 - s2, cx2 + s2 * 0.5, cy2 + s2 * 0.5);
+        sgrad.addColorStop(0, 'rgba(255,255,255,0.9)');
+        sgrad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = sgrad;
+        g.save();
+        g.translate(cx2, cy2); g.rotate(Math.PI / 4);
+        g.fillRect(-s2, -s2, s2 * 2, s2 * 2);
+        g.restore();
+        g.globalAlpha = 1;
+
+        // Rare weathering: chip/darker tile
+        if (rnd2() > 0.94) {
+          g.fillStyle = 'rgba(30,20,10,0.25)';
+          g.save();
+          g.translate(cx2, cy2); g.rotate(Math.PI / 4);
+          g.fillRect(-s2 * 0.8, -s2 * 0.8, s2 * 1.6, s2 * 0.4);
+          g.restore();
+        }
       }
     }
   }
@@ -1047,24 +1394,111 @@ export function minaretShaft(): THREE.CanvasTexture {
 }
 
 /**
- * Seamless girih tile: cobalt bg, white 8-point star centre, gold inner star,
- * turquoise quarter-stars at corners → tiles seamlessly.
- * Port of reference makeGirihTileTexture. 256². Used on pilaster strips + inner arch.
+ * Seamless girih tile with full strapwork: cobalt bg, white 8-point star centre
+ * with strap ribbons connecting to turquoise quarter-stars at corners.
+ * Outlined ribbons (dark edge lines) give interlaced strapwork depth.
+ * Used on pilaster strips + inner arch. 512² for crispness at zoom.
  */
 export function girihTile(): THREE.CanvasTexture {
-  const S = 256;
+  const S = 512; // raised from 256 for crisper strapwork at zoom
 
   function draw(g: CanvasRenderingContext2D, w: number, _h: number) {
     g.fillStyle = px(REF_COBALT); g.fillRect(0, 0, w, w);
-    star8ctx(g, w / 2, w / 2, w * 0.34, px(REF_WHITE));
-    star8ctx(g, w / 2, w / 2, w * 0.15, px(REF_GOLD));
-    // Quarter-stars at each corner for seamless tiling
-    for (const [cx, cy] of [[0, 0], [w, 0], [0, w], [w, w]] as [number, number][]) {
-      star8ctx(g, cx, cy, w * 0.20, px(REF_TURQUOISE));
+
+    const cx = w / 2, cy = w / 2;
+    const outerR = w * 0.33;
+    const innerR = w * 0.135;
+    const strapW = w * 0.072;
+    const strapHalf = strapW / 2;
+    const pts = 8;
+
+    // ── 1. Fill between-star polygon zones with turquoise ─────────────────
+    // Draw connecting rhombus/kite shapes from star to corners
+    g.fillStyle = px(REF_TURQUOISE);
+    for (let i = 0; i < pts; i++) {
+      const aOuter = (i * Math.PI / 4) - Math.PI / 2;  // outer point direction
+      const aMid   = aOuter + Math.PI / 8;              // mid between two outer points
+      // Kite polygon: from outer point outward to edge, sweeping to neighbour
+      g.beginPath();
+      g.moveTo(cx + Math.cos(aOuter) * outerR * 0.92, cy + Math.sin(aOuter) * outerR * 0.92);
+      g.lineTo(cx + Math.cos(aOuter) * w * 0.5 * 0.88, cy + Math.sin(aOuter) * w * 0.5 * 0.88);
+      g.lineTo(cx + Math.cos(aMid) * w * 0.46, cy + Math.sin(aMid) * w * 0.46);
+      g.lineTo(cx + Math.cos(aMid + Math.PI / 8) * w * 0.5 * 0.88, cy + Math.sin(aMid + Math.PI / 8) * w * 0.5 * 0.88);
+      g.lineTo(cx + Math.cos(aOuter + Math.PI / 4) * outerR * 0.92, cy + Math.sin(aOuter + Math.PI / 4) * outerR * 0.92);
+      g.closePath(); g.fill();
     }
+
+    // ── 2. Strap ribbons from center star to tile edges ───────────────────
+    g.strokeStyle = px(REF_WHITE);
+    g.lineWidth = strapW;
+    g.lineCap = 'square';
+    for (let i = 0; i < pts; i++) {
+      const aOuter = (i * Math.PI / 4) - Math.PI / 2;
+      const startX = cx + Math.cos(aOuter) * outerR * 0.88;
+      const startY = cy + Math.sin(aOuter) * outerR * 0.88;
+      const endX   = cx + Math.cos(aOuter) * w * 0.505;
+      const endY   = cy + Math.sin(aOuter) * w * 0.505;
+      g.beginPath();
+      g.moveTo(startX, startY);
+      g.lineTo(endX, endY);
+      g.stroke();
+    }
+
+    // ── 3. Dark strap-edge outlines for interlaced depth ─────────────────
+    g.strokeStyle = 'rgba(10,25,65,0.50)';
+    g.lineWidth = Math.max(1, strapHalf * 0.28);
+    g.lineCap = 'round';
+    for (let i = 0; i < pts; i++) {
+      const aOuter = (i * Math.PI / 4) - Math.PI / 2;
+      const perpA  = aOuter + Math.PI / 2;
+      const startR = outerR * 0.72;
+      const endR   = w * 0.505;
+      for (const side of [-1, 1]) {
+        const offX = Math.cos(perpA) * strapHalf * side;
+        const offY = Math.sin(perpA) * strapHalf * side;
+        g.beginPath();
+        g.moveTo(cx + Math.cos(aOuter) * startR + offX, cy + Math.sin(aOuter) * startR + offY);
+        g.lineTo(cx + Math.cos(aOuter) * endR   + offX, cy + Math.sin(aOuter) * endR   + offY);
+        g.stroke();
+      }
+    }
+
+    // ── 4. 8-pointed star at center ───────────────────────────────────────
+    star8ctx(g, cx, cy, outerR, px(REF_WHITE));
+
+    // ── 5. Star outline for depth ─────────────────────────────────────────
+    g.strokeStyle = 'rgba(10,25,65,0.42)';
+    g.lineWidth = Math.max(1, strapW * 0.22);
+    g.beginPath();
+    for (let i = 0; i < pts * 2; i++) {
+      const a = (i * Math.PI / pts) - Math.PI / 2;
+      const r = i % 2 === 0 ? outerR : innerR;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+    }
+    g.closePath(); g.stroke();
+
+    // ── 6. Gold inner star ────────────────────────────────────────────────
+    star8ctx(g, cx, cy, w * 0.14, px(REF_GOLD));
+
+    // ── 7. Quarter-stars at each corner for seamless tiling ───────────────
+    for (const [kx, ky] of [[0, 0], [w, 0], [0, w], [w, w]] as [number, number][]) {
+      star8ctx(g, kx, ky, w * 0.195, px(REF_TURQUOISE));
+      // Gold accent at corner star centre
+      g.fillStyle = px(REF_GOLD);
+      g.beginPath(); g.arc(kx, ky, w * 0.038, 0, Math.PI * 2); g.fill();
+    }
+
+    // ── 8. Subtle specular glaze sheen ────────────────────────────────────
+    const sheenGrad = g.createLinearGradient(w * 0.2, w * 0.1, w * 0.8, w * 0.6);
+    sheenGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    sheenGrad.addColorStop(0.45, 'rgba(255,255,255,0.07)');
+    sheenGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sheenGrad;
+    g.fillRect(0, 0, w, w);
   }
 
-  const [cv, g] = canvas(S, S, REF_COBALT, draw, false); // pilasters don't need 2x
+  const [cv, g] = canvas(S, S, REF_COBALT, draw, false); // pilasters: no 2x
   draw(g, S, S);
   return toTexture(cv);
 }
@@ -1234,24 +1668,74 @@ function portalStar8(
   ctx.fill();
 }
 
-/** Blocky pseudo-kufic calligraphy strip on cobalt. Seeded — no Math.random. */
+/** Blocky pseudo-kufic calligraphy strip on cobalt. Seeded — no Math.random.
+ * Richer version: varied stroke weights, serifs, horizontal baseline tabs,
+ * dot diacritics, gold frame top+bottom. Reads as inscription at distance. */
 function portalDrawKuficBand(
   ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, seed = 1,
 ) {
   ctx.save();
   ctx.fillStyle = px(C_COBALT); ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = px(C_WHITE);
-  const rnd = makeLcg(seed);
-  const bw = h * 0.16;
-  for (let gx = x + h * 0.4; gx < x + w - h * 0.4; gx += h * 0.55) {
-    const tall = h * (0.45 + rnd() * 0.35);
-    ctx.fillRect(gx, y + h * 0.85 - tall, bw, tall);
-    if (rnd() > 0.45) ctx.fillRect(gx, y + h * 0.85 - bw, h * 0.38, bw);
-    if (rnd() > 0.7)  ctx.fillRect(gx, y + h * 0.85 - tall, h * 0.3, bw);
-  }
+
+  // Gold trim top + bottom
   ctx.fillStyle = px(C_GOLD);
   ctx.fillRect(x, y, w, h * 0.06);
   ctx.fillRect(x, y + h * 0.94, w, h * 0.06);
+
+  // Inner fine gold rule lines (authentic kufic frame has double rules)
+  ctx.strokeStyle = px(C_GOLD);
+  ctx.lineWidth = Math.max(1, h * 0.018);
+  ctx.beginPath(); ctx.moveTo(x, y + h * 0.13); ctx.lineTo(x + w, y + h * 0.13); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y + h * 0.87); ctx.lineTo(x + w, y + h * 0.87); ctx.stroke();
+
+  // Baseline (horizontal rule at 82% height — the kufic baseline)
+  ctx.fillStyle = px(C_WHITE);
+  ctx.fillRect(x + h * 0.2, y + h * 0.82, w - h * 0.4, Math.max(2, h * 0.032));
+
+  // Glyph strokes with varied weights
+  const rnd = makeLcg(seed);
+  const bw = h * 0.145; // base glyph width
+  let gx = x + h * 0.38;
+  while (gx < x + w - h * 0.38) {
+    const wMult = rnd() > 0.6 ? 1.6 : (rnd() > 0.4 ? 1.0 : 0.7); // varied weight
+    const gw = bw * wMult;
+    const tall = h * (0.38 + rnd() * 0.38);
+    const gy = y + h * 0.82 - tall;
+
+    // Main vertical stroke
+    ctx.fillStyle = px(C_WHITE);
+    ctx.fillRect(gx, gy, gw, tall);
+
+    // Horizontal tab at top (alif crossbar / lam head)
+    if (rnd() > 0.38) {
+      const tabW = h * (0.22 + rnd() * 0.22);
+      const tabH = h * 0.05;
+      ctx.fillRect(gx - tabW * 0.3, gy - tabH, gw + tabW * 0.6, tabH);
+    }
+
+    // Horizontal connector shelf (mid-height — creates "step" in kufic)
+    if (rnd() > 0.55) {
+      const shelfH = h * 0.038;
+      const shelfW = h * (0.18 + rnd() * 0.28);
+      ctx.fillRect(gx, gy + tall * (0.3 + rnd() * 0.3), shelfW, shelfH);
+    }
+
+    // Dot diacritic above tall strokes
+    if (rnd() > 0.62 && tall > h * 0.5) {
+      const dotR = Math.max(2, h * 0.045);
+      ctx.beginPath();
+      ctx.arc(gx + gw / 2, gy - dotR * 2.2, dotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Serif foot at baseline
+    if (rnd() > 0.35) {
+      const sfW = gw * 1.4, sfH = h * 0.032;
+      ctx.fillRect(gx - (sfW - gw) / 2, y + h * 0.82, sfW, sfH);
+    }
+
+    gx += gw + h * (0.08 + rnd() * 0.18);
+  }
   ctx.restore();
 }
 

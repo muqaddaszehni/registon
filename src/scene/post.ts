@@ -9,11 +9,13 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
  *   RenderPass → UnrealBloomPass (turquoise dome glints only) → OutputPass
  *
  * Bloom tuning:
- *   threshold 0.82 — only very bright surfaces (turquoise emissive domes + sky glints)
- *   strength  0.22 — subtle sparkle, not hazy
- *   radius    0.60 — tight spread, prevents halo bleed onto stone walls
+ *   threshold 0.88 — only very bright emissive surfaces (turquoise domes + gold finials)
+ *                    raised from 0.82 so lit stone faces (mid-bright) don't bloom
+ *   strength  0.20 — subtle sparkle, not hazy
+ *   radius    0.55 — tight spread, prevents halo bleed onto stone walls
  *
  * ACES tone mapping must be set on the renderer BEFORE this is called.
+ * Sky gradient stops are pre-compensated for ACES compression — preserve this.
  */
 export function makeComposer(
   renderer: THREE.WebGLRenderer,
@@ -26,9 +28,9 @@ export function makeComposer(
 
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(innerWidth, innerHeight),
-    0.22,   // strength
-    0.60,   // radius
-    0.82,   // threshold — only very bright emissive turquoise blooms
+    0.20,   // strength — subtle, no haze
+    0.55,   // radius — tight, prevents bleed
+    0.88,   // threshold — only very bright emissive turquoise/gold blooms; stone stays clean
   );
   composer.addPass(bloom);
 

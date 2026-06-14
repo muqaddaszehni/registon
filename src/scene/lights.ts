@@ -1,25 +1,37 @@
 import * as THREE from 'three';
-import { C } from '../palette';
 
 export function addSunsetLights(scene: THREE.Scene) {
-  // Sun elevated to y=20 — open plaza in direct light, long raking shadows from minarets/pylons.
-  const sun = new THREE.DirectionalLight(C.sun, 2.2);
-  sun.position.set(-30, 20, 8); // west-ish, elevated — good shadow angle + plaza sunlit
+  // ── Key Sun: warm low-angle golden-hour — long raking shadows from minarets/pylons
+  // Position: west-southwest, low elevation so shadows rake across the plaza
+  const sun = new THREE.DirectionalLight(0xffcc88, 2.8);
+  sun.position.set(-35, 16, 12);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
-  const s = 32;
-  Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 120 });
+  const s = 36;
+  Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 130 });
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.intensity = 0.55; // crisper shadow contrast
+  sun.shadow.intensity = 0.65; // soft but present — golden-hour shadows
   scene.add(sun);
 
-  // Hemisphere: warm sky top, very warm sandy bounce from ground
-  // Ground hemisphere colour is key: warm sand/amber keeps shadowed floor cream not grey
-  const fill = new THREE.HemisphereLight(0xf8ead8, 0xf0c878, 0.80);
-  scene.add(fill);
+  // ── Sky fill: slightly cool on top (blue-sky), warm amber ground bounce
+  //    Keeps shadows reading cool-warm contrast without going dead grey
+  const hemi = new THREE.HemisphereLight(0xd8e8f8, 0xf4c870, 0.72);
+  scene.add(hemi);
 
-  // East/front fill: warm orange-white — keeps side faces from going dead grey
-  const east = new THREE.DirectionalLight(0xf8e4c0, 0.45);
-  east.position.set(30, 10, -5);
+  // ── Warm bounce / east fill: secondary warm fill from opposite side
+  //    Keeps east-facing stone faces alive without going grey
+  const east = new THREE.DirectionalLight(0xf8e0b8, 0.40);
+  east.position.set(28, 8, -8);
   scene.add(east);
+
+  // ── Warm rim light: catches turquoise domes and gold finials from above-rear
+  //    Simulates golden sky bounce lighting the top surfaces of domes
+  const rim = new THREE.DirectionalLight(0xffaa44, 0.60);
+  rim.position.set(-10, 35, -25); // high rear — back-lights dome tops
+  scene.add(rim);
+
+  // ── Atmospheric fog: exponential, very faint warm haze.
+  //    Density 0.003 keeps foreground crisp; only geometry beyond ~80 units starts to warm-haze.
+  //    Warm cream color prevents the fog from greying out stone.
+  scene.fog = new THREE.FogExp2(0xf5e8d0, 0.003);
 }
