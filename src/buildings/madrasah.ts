@@ -200,9 +200,27 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   for (const d of o.domes ?? []) {
     const dd = dome(d.r, d.ribbed);
     const domeZ = d.z ?? -o.portal.d * 0.1;
-    const domeY = o.wingH + (d.yLift ?? 0);
+    const yLift = d.yLift ?? 0;
+    const domeY = o.wingH + yLift;
     dd.position.set(d.offset, domeY, domeZ);
     raised.add(dd);
+
+    // When yLift > 0 the dome group sits above the wing roof, leaving a gap.
+    // Close it with a tall support drum that spans from the wing roof (y=0 here,
+    // i.e. y=wingH in raised-group space) up to the dome group origin (y=yLift above that).
+    // Radii match the dome's drum so the stack is seamless and continuous.
+    if (yLift > 0) {
+      const drumR = d.r * 0.72;
+      const support = new THREE.Mesh(
+        new THREE.CylinderGeometry(drumR * 1.05, drumR * 1.12, yLift, 24),
+        new THREE.MeshLambertMaterial({ color: 0xc8b89a }), // warm sandstone
+      );
+      // Bottom of support at wing roof (y=wingH), top at wing roof + yLift = domeY
+      support.position.set(d.offset, o.wingH + yLift / 2, domeZ);
+      support.castShadow = true;
+      support.receiveShadow = true;
+      raised.add(support);
+    }
   }
 
   // ── CORNER TURRETS ───────────────────────────────────────────────

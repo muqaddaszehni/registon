@@ -125,3 +125,4 @@ addGardens(scene);
 onTick(addDoves(scene, grid, () => hero.worldPos));
 
 export { scene, camera, renderer };
+(window as any).__scene = scene;
