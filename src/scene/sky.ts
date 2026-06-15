@@ -26,8 +26,8 @@ export function makeSky(): THREE.CanvasTexture {
   //    sitting on the amber band so the warm low sun reads without a hard disc.
   g.save();
   const glow = g.createRadialGradient(160, 400, 6, 160, 400, 200);
-  glow.addColorStop(0,   'rgba(255,238,200,0.34)'); // warm core (soft, not blown)
-  glow.addColorStop(0.4, 'rgba(255,216,152,0.14)');
+  glow.addColorStop(0,   'rgba(255,238,200,0.16)'); // warm core (soft, not blown)
+  glow.addColorStop(0.4, 'rgba(255,216,152,0.07)');
   glow.addColorStop(1,   'rgba(255,202,142,0.0)');  // fades out
   g.globalCompositeOperation = 'lighter';
   g.fillStyle = glow;

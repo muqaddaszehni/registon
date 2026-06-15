@@ -83,9 +83,9 @@ export function makeComposer(
 
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(innerWidth, innerHeight),
-    0.26,   // strength — gentle glow on bright turquoise/gold
-    0.55,   // radius — tight, prevents bleed
-    0.85,   // threshold — only bright emissive blooms; matte stone stays clean
+    0.16,   // strength — gentle glow on bright turquoise/gold
+    0.5,    // radius — tight, prevents bleed
+    0.88,   // threshold — only bright emissive blooms; matte stone stays clean
   );
   composer.addPass(bloom);
 

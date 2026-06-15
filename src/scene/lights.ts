@@ -45,5 +45,5 @@ export function addSunsetLights(scene: THREE.Scene) {
   // ── Atmospheric fog: exponential, very faint WARM haze.
   //    Density 0.0035 keeps foreground crisp; distant massing warm-recedes.
   //    Warm peach-cream color so haze reads as golden air, never greys the stone.
-  scene.fog = new THREE.FogExp2(0xf6dfbe, 0.0035);
+  scene.fog = new THREE.FogExp2(0xf6dfbe, 0.0016);
 }
