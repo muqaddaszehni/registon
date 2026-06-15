@@ -5,20 +5,34 @@ export function makeSky(): THREE.CanvasTexture {
   cv.width = 512; cv.height = 512;
   const g = cv.getContext('2d')!;
 
-  // ── Multi-stop gradient: deep violet zenith → cool periwinkle mid-sky
-  //    → warm peach horizon band → soft amber glow near ground
+  // ── Multi-stop gradient: soft violet zenith → cool periwinkle mid-sky
+  //    → warm peach → amber horizon. Smooth, finely-stepped so no banding shows.
   // Values are pre-compensated for ACES desaturation through EffectComposer.
-  // ACES compresses warm channels, so source peach values are boosted to compensate.
+  // ACES compresses warm channels, so source peach/amber values are boosted.
   const grad = g.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0,    '#7a6898'); // deep violet-purple zenith (richer than C.skyTop)
-  grad.addColorStop(0.20, '#9b8bb0'); // soft violet — same as C.skyTop for mid transition
-  grad.addColorStop(0.42, '#c4a8c8'); // muted periwinkle-mauve
-  grad.addColorStop(0.60, '#ecca9c'); // warm peach transition
-  grad.addColorStop(0.75, '#ffd09c'); // bright peach horizon glow (ACES-compensated)
-  grad.addColorStop(0.88, '#ffbe80'); // deeper amber band
-  grad.addColorStop(1,    '#ffaa68'); // rich amber at horizon base
+  grad.addColorStop(0,    '#80709e'); // soft violet zenith (not too dark — golden hour, sky still lit)
+  grad.addColorStop(0.18, '#9788b2'); // muted violet
+  grad.addColorStop(0.34, '#b49fbe'); // periwinkle-mauve
+  grad.addColorStop(0.48, '#cdb1b2'); // dusty mauve→warm transition (neutral blend point)
+  grad.addColorStop(0.62, '#e8c49e'); // warm peach
+  grad.addColorStop(0.74, '#ffd2a0'); // bright peach (sun-glow band, ACES-compensated)
+  grad.addColorStop(0.85, '#ffc488'); // amber
+  grad.addColorStop(0.94, '#ffb474'); // deeper amber
+  grad.addColorStop(1,    '#ffa866'); // rich amber at horizon base
   g.fillStyle = grad;
   g.fillRect(0, 0, 512, 512);
+
+  // ── Concentrated horizon sun-glow: soft warm radial bloom low-left (sun side),
+  //    sitting on the amber band so the warm low sun reads without a hard disc.
+  g.save();
+  const glow = g.createRadialGradient(160, 400, 6, 160, 400, 200);
+  glow.addColorStop(0,   'rgba(255,238,200,0.34)'); // warm core (soft, not blown)
+  glow.addColorStop(0.4, 'rgba(255,216,152,0.14)');
+  glow.addColorStop(1,   'rgba(255,202,142,0.0)');  // fades out
+  g.globalCompositeOperation = 'lighter';
+  g.fillStyle = glow;
+  g.fillRect(0, 280, 512, 232);
+  g.restore();
 
   // ── Faint high cirrus wisps — painted with deterministic seed positions
   //    Very low opacity, light streaks suggesting high altitude ice cloud

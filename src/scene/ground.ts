@@ -53,120 +53,139 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
   const tH = h / rows;  // tile height in px
 
   // ── Palette ──────────────────────────────────────────────────────────────
-  // Lift plaza colour toward white to compensate for MeshLambertMaterial attenuation
-  const plazaNum = lightenNum(C.plaza, 0.42);   // ~0xf6f1e8 warm cream
+  // Lift plaza colour toward white to compensate for MeshLambertMaterial attenuation.
+  // The plaza must read as the LIGHTEST, warmest surface in the whole scene.
+  const plazaNum = lightenNum(C.plaza, 0.44);   // ~0xf7f2ea warm cream
   const baseHex  = hex(plazaNum);
 
-  // Flagstone: pale warm limestone tones
-  const stoneBase      = plazaNum;                      // 0xf6f1e8
-  const stoneDark      = 0xe2d8c4;                      // noticeably darker stone variant
-  const stoneMid       = 0xeee7d6;                      // mid variant
-  const stoneMortarNum = 0xc8bfaf;                      // mortar seam — warm mid-grey, visible
+  // Flagstone: pale warm limestone tones — subtle range so the field stays bright.
+  const stoneBase      = plazaNum;                      // brightest cream
+  const stoneDark      = 0xe9ddc6;                       // warm buff (darker flag)
+  const stoneMid       = 0xf1e8d6;                       // mid warm cream
+  const stoneMortarNum = 0xcdbf9f;                       // mortar seam — warm golden taupe
   const mortarHex      = hex(stoneMortarNum);
 
-  // Walkway: distinctly lighter white stone band (axial path)
-  const walkStoneNum = lightenNum(C.marble, 0.30);    // ~0xf7f5ef near-white warm
+  // Walkway: distinctly lighter near-white warm stone band (axial path).
+  const walkStoneNum = lightenNum(C.marble, 0.34);    // ~0xf8f6f1 near-white warm
   const walkHex      = hex(walkStoneNum);
-  const walkDarkNum  = lightenNum(C.marble, 0.12);    // slightly darker variant
+  const walkDarkNum  = lightenNum(C.marble, 0.16);    // slightly darker variant
   const walkDarkHex  = hex(walkDarkNum);
 
-  // Inlay: pale warm limestone brick for herringbone border — keeps ground light
-  // These are only slightly darker/warmer than the base flagstones, not terracotta
-  const brickDark  = lightenNum(0xddd0b8, 0.05);  // ~0xe6dcc8 warm pale buff
-  const brickLight = lightenNum(0xe8ddc8, 0.10);  // ~0xeee6d8 lighter pale buff
+  // Inlay: pale warm limestone brick for herringbone borders — keeps ground light.
+  // Only slightly warmer/darker than base flags, never terracotta.
+  const brickDark  = 0xe4d8c0;  // warm pale buff
+  const brickLight = 0xefe6d4;  // lighter pale buff
   const brickMortarHex = hex(stoneMortarNum);      // same mortar as flagstones
 
+  // Geometric inlay ink: warm taupe, used for the radiating Registan-style line art.
+  // Kept low-contrast so it is subtle at default zoom, rewarding up close.
+  const inlayInk    = 0xb8a888;                       // warm taupe line
+  const inlayInkHex = hex(inlayInk);
+  const inlayFill   = 0xe0d4ba;                       // soft inlay fill (slightly darker buff)
+  const inlayFillHex = hex(inlayFill);
+
   // Medallion stroke colours
-  const medalStroke = darken(plazaNum, 0.22);         // warm mid-grey
+  const medalStroke = darken(plazaNum, 0.26);         // warm mid-grey ink
 
   // ── 1. Base fill ─────────────────────────────────────────────────────────
   g.fillStyle = baseHex;
   g.fillRect(0, 0, w, h);
 
   // ── 2. Large limestone flagstones with per-stone tonal variation ─────────
-  // Stone size: 2×3 tiles (~landscape rectangle, like real cut stone)
-  const SW = tW * 2;  // stone width
-  const SH = tH * 1.5; // stone height (roughly 2:3 ratio)
+  // Big squarish cut flags (~1.5 tiles) laid in a running-bond stagger, like the
+  // pale stone of the real Registan plaza. Per-stone seam drawn with the flag so
+  // every joint is crisp and never doubles up.
+  const SW = tW * 1.5;   // stone width
+  const SH = tH * 1.5;   // stone height (near-square cut flags)
   const stoneRng = makeLCG(0xA3B7C1);
+  const seam = Math.max(1.0, tW * 0.05);
 
-  // Draw stones in staggered rows
-  const staggerCols = Math.ceil(w / SW) + 1;
+  const staggerCols = Math.ceil(w / SW) + 2;
   const staggerRows = Math.ceil(h / SH) + 1;
 
   for (let sr = 0; sr < staggerRows; sr++) {
-    const offset = (sr % 2) * (SW * 0.5); // stagger offset for alternating rows
-    for (let sc = 0; sc < staggerCols; sc++) {
+    const offset = (sr % 2) * (SW * 0.5); // running-bond stagger
+    for (let sc = -1; sc < staggerCols; sc++) {
       const px = sc * SW - offset;
       const py = sr * SH;
       if (px + SW < 0 || py + SH < 0 || px >= w || py >= h) continue;
 
-      // LCG tonal variation: ±12% brightness per stone for natural limestone variety
-      const vary = stoneRng() * 0.12 - 0.06;
-      let stoneNum: number;
+      // Per-flag tone: pick a base variant then nudge brightness ±5%.
       const t = stoneRng();
-      if (t < 0.3) stoneNum = stoneDark;
-      else if (t < 0.65) stoneNum = stoneMid;
+      let stoneNum: number;
+      if (t < 0.34) stoneNum = stoneDark;
+      else if (t < 0.68) stoneNum = stoneMid;
       else stoneNum = stoneBase;
-      // Apply per-stone variation
-      g.fillStyle = vary >= 0 ? hex(lightenNum(stoneNum, vary)) : darken(stoneNum, -vary);
+      const vary = stoneRng() * 0.10 - 0.05;
+      const flagNum = vary >= 0 ? lightenNum(stoneNum, vary) : (() => {
+        const a = (stoneNum >> 16) & 0xff, b = (stoneNum >> 8) & 0xff, c2 = stoneNum & 0xff;
+        const f = 1 + vary;
+        return ((Math.round(a * f) << 16) | (Math.round(b * f) << 8) | Math.round(c2 * f)) >>> 0;
+      })();
+      g.fillStyle = hex(flagNum);
 
-      // Clip inset (mortar seam width)
-      const seam = Math.max(1.2, tW * 0.045);
-      const sx = px + seam * 0.5;
-      const sy = py + seam * 0.5;
+      // Mortar seam: fill the seam-inset flag over the mortar-coloured base.
+      const sx = px + seam;
+      const sy = py + seam;
       const sW2 = SW - seam;
       const sH2 = SH - seam;
       if (sW2 <= 0 || sH2 <= 0) continue;
       g.fillRect(sx, sy, sW2, sH2);
 
-      // Faint vein: 1 or 2 diagonal lines across stone
-      const veinCount = stoneRng() < 0.35 ? 1 : (stoneRng() < 0.2 ? 2 : 0);
-      if (veinCount > 0) {
+      // Fine veining: a faint hairline curve on ~30% of flags.
+      if (stoneRng() < 0.3) {
         g.save();
-        g.globalAlpha = 0.07 + stoneRng() * 0.06;
-        g.strokeStyle = darken(stoneNum, 0.12);
-        g.lineWidth = 0.4;
-        for (let v = 0; v < veinCount; v++) {
-          const vx0 = px + seam + stoneRng() * (SW - seam * 2) * 0.6;
-          const vy0 = py + seam;
-          const vx1 = vx0 + (stoneRng() - 0.5) * SW * 0.5;
-          const vy1 = py + SH - seam;
-          g.beginPath();
-          g.moveTo(vx0, vy0);
-          g.bezierCurveTo(
-            vx0 + (stoneRng() - 0.5) * SW * 0.3, vy0 + SH * 0.3,
-            vx1 + (stoneRng() - 0.5) * SW * 0.3, vy0 + SH * 0.6,
-            vx1, vy1,
-          );
-          g.stroke();
-        }
+        g.globalAlpha = 0.05 + stoneRng() * 0.05;
+        g.strokeStyle = darken(stoneNum, 0.14);
+        g.lineWidth = 0.6;
+        const vx0 = sx + stoneRng() * sW2 * 0.5;
+        const vy0 = sy + stoneRng() * sH2 * 0.3;
+        const vx1 = vx0 + (stoneRng() - 0.5) * sW2 * 0.7;
+        const vy1 = sy + sH2 * (0.7 + stoneRng() * 0.3);
+        g.beginPath();
+        g.moveTo(vx0, vy0);
+        g.bezierCurveTo(
+          vx0 + (stoneRng() - 0.5) * sW2 * 0.4, vy0 + sH2 * 0.35,
+          vx1 + (stoneRng() - 0.5) * sW2 * 0.4, vy0 + sH2 * 0.6,
+          vx1, vy1,
+        );
+        g.stroke();
+        g.restore();
+      }
+
+      // A soft top-left sheen on the brightest flags for a polished-stone feel.
+      if (stoneNum === stoneBase && stoneRng() < 0.4) {
+        g.save();
+        g.globalAlpha = 0.06;
+        g.fillStyle = '#ffffff';
+        g.fillRect(sx, sy, sW2 * 0.55, sH2 * 0.5);
         g.restore();
       }
     }
   }
 
-  // ── 3. Mortar grid over stones ────────────────────────────────────────────
-  // Draw thin mortar lines at SW and SH intervals (both stagger-offset and non-offset)
-  // We'll draw a regular grid for simplicity — it overlaps stone boundaries cleanly
+  // ── 3. Mortar base bleed-through ──────────────────────────────────────────
+  // The seam between flags is the mortar base showing through. We laid flags
+  // inset by `seam` over the cream base; paint a faint mortar wash in the seams
+  // by drawing the grid lines lightly (the flags already cover the interiors).
+  g.save();
   g.strokeStyle = mortarHex;
-  g.lineWidth = Math.max(1.2, tW * 0.05);
-  g.globalAlpha = 0.75;  // stronger mortar seams for visible flagstone joints
-  // Horizontal mortar lines
+  g.lineWidth = seam;
+  g.globalAlpha = 0.42;
   for (let sr = 0; sr <= staggerRows; sr++) {
-    const y = sr * SH;
+    const y = sr * SH - seam * 0.5;
     g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
   }
-  // Vertical mortar lines (two passes: even rows and odd rows for stagger)
-  for (let sr = 0; sr <= staggerRows; sr++) {
+  for (let sr = 0; sr < staggerRows; sr++) {
     const offset = (sr % 2) * (SW * 0.5);
     const y0 = sr * SH;
     const y1 = y0 + SH;
-    for (let sc = 0; sc <= staggerCols + 1; sc++) {
-      const x = sc * SW - offset;
+    for (let sc = -1; sc <= staggerCols; sc++) {
+      const x = sc * SW - offset - seam * 0.5;
       g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
     }
   }
-  g.globalAlpha = 1;
+  g.restore();
 
   // ── 4. Blocked footprint darkening ────────────────────────────────────────
   const blockedFill = darken(plazaNum, 0.07);
@@ -179,8 +198,7 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
     }
   }
 
-  // ── 5. Central axial walkway ──────────────────────────────────────────────
-  // South entrance column: find the 'S' tile
+  // South entrance column: find the 'S' tile (shared by lattice + walkway)
   let southCol = 13; // default from layout
   for (let c = 0; c < cols; c++) {
     if (LAYOUT[19]?.[c] === 'S') { southCol = c; break; }
@@ -190,69 +208,98 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
   const walkRight  = (southCol + 2) * tW;
   const walkWidth  = walkRight - walkLeft;
 
-  // Center of plaza: row ~10
-  const plazaCenterRow = 10;
+  // Open walkable plaza bounds (tiles). Used to clip the geometric inlay so it
+  // never draws under building footprints.
+  const openL = tW * 3.2, openR = w - tW * 3.2;
+  const openT = tH * 3.2, openB = tH * 19.2;
 
-  // Draw walkway from south edge to plaza center
-  g.save();
-  g.globalAlpha = 1;
-  // Main walkway fill: lighter stone
-  g.fillStyle = walkHex;
-  g.fillRect(walkLeft, 0, walkWidth, h);
-
-  // Walkway border bands (slightly darker lines parallel to walkway edges)
-  g.strokeStyle = darken(walkStoneNum, 0.10);
-  g.lineWidth = Math.max(1.5, tW * 0.06);
-  g.beginPath();
-  g.moveTo(walkLeft + g.lineWidth, 0);
-  g.lineTo(walkLeft + g.lineWidth, h);
-  g.stroke();
-  g.beginPath();
-  g.moveTo(walkRight - g.lineWidth, 0);
-  g.lineTo(walkRight - g.lineWidth, h);
-  g.stroke();
-  g.restore();
-
-  // Walkway internal stone joints (perpendicular bands across walkway)
+  // ── 4b. Radiating geometric inlay lattice (the Registan signature) ─────────
+  // A subtle diamond-grid of interlaced lines + small star nodes across the open
+  // plaza, echoing the inlaid stone of the real square. Low contrast: barely
+  // there at default zoom, crisp and rewarding up close. Drawn UNDER the walkway
+  // so the lighter axial path reads on top.
   {
-    const jointRng = makeLCG(0xF2D1A0);
     g.save();
-    g.globalAlpha = 0.35;
-    g.strokeStyle = mortarHex;
-    g.lineWidth = Math.max(1, tW * 0.04);
-    // Horizontal joints across walkway at every 1.5 tile intervals
-    for (let jy = SH; jy < h; jy += SH) {
-      g.beginPath();
-      g.moveTo(walkLeft, jy);
-      g.lineTo(walkRight, jy);
-      g.stroke();
+    g.beginPath();
+    g.rect(openL, openT, openR - openL, openB - openT);
+    g.clip();
+
+    // Cell size of the diamond lattice (≈ 4 tiles → large stately pattern)
+    const cell = tW * 4;
+    const cxC = w / 2, cyC = h / 2;
+
+    // Diagonal lattice lines (two families at ±45°) → diamond/cross grid.
+    g.strokeStyle = inlayInkHex;
+    g.lineWidth = Math.max(0.9, tW * 0.035);
+    g.globalAlpha = 0.16;
+    const diag = openR - openL + (openB - openT);
+    for (let d = -diag; d < diag; d += cell) {
+      // family A: y = x + k
+      g.beginPath(); g.moveTo(openL, openT + (d)); g.lineTo(openR, openT + d + (openR - openL)); g.stroke();
+      // family B: y = -x + k
+      g.beginPath(); g.moveTo(openL, openB - (d)); g.lineTo(openR, openB - d - (openR - openL)); g.stroke();
     }
-    // Vertical split down center
-    const wCenter = (walkLeft + walkRight) / 2;
-    for (let jy = 0; jy < h; jy += SH) {
-      const jy2 = jy + SH;
-      // Alternate center line per band
-      if (jointRng() > 0.5) {
-        g.beginPath();
-        g.moveTo(wCenter, jy);
-        g.lineTo(wCenter, jy2);
-        g.stroke();
+
+    // Small interlace star node at each lattice intersection (grid of `cell`).
+    g.globalAlpha = 0.2;
+    const nodeR = cell * 0.16;
+    for (let gx = cxC - Math.ceil((cxC - openL) / cell) * cell; gx < openR + cell; gx += cell) {
+      for (let gy = cyC - Math.ceil((cyC - openT) / cell) * cell; gy < openB + cell; gy += cell) {
+        if (gx < openL - cell || gy < openT - cell) continue;
+        drawInlayStarNode(g, gx, gy, nodeR, inlayInkHex, inlayFillHex);
       }
     }
     g.restore();
   }
 
-  // ── 6. Star/cross medallion inlays along walkway ──────────────────────────
-  // Place medallion inlays at regular intervals along the walkway
-  const walkCenterX = (walkLeft + walkRight) / 2;
-  const inlaySpacing = tH * 3.5; // ~3.5 rows apart
-  const inlayRadius = walkWidth * 0.28;
-  const inlayPositions: number[] = [];
-  for (let y = tH * 4; y < h - tH * 2; y += inlaySpacing) {
-    inlayPositions.push(y);
+  // ── 5. Central axial walkway — the lightest band of all ───────────────────
+  // Runs the full depth of the plaza. Fill the open span; the lattice/flagstones
+  // remain under the building footprint rows.
+  const wCenter = (walkLeft + walkRight) / 2;
+  g.save();
+  g.globalAlpha = 1;
+  g.fillStyle = walkHex;
+  g.fillRect(walkLeft, 0, walkWidth, h);
+
+  // Crisp twin edge bands (a darker kerb then a thin shadow line) so the path
+  // reads as a raised marble runner.
+  g.strokeStyle = walkDarkHex;
+  g.lineWidth = Math.max(2, tW * 0.09);
+  g.beginPath(); g.moveTo(walkLeft + g.lineWidth * 0.5, 0); g.lineTo(walkLeft + g.lineWidth * 0.5, h); g.stroke();
+  g.beginPath(); g.moveTo(walkRight - g.lineWidth * 0.5, 0); g.lineTo(walkRight - g.lineWidth * 0.5, h); g.stroke();
+  g.strokeStyle = mortarHex;
+  g.lineWidth = Math.max(1, tW * 0.04);
+  g.globalAlpha = 0.5;
+  g.beginPath(); g.moveTo(walkLeft, 0); g.lineTo(walkLeft, h); g.stroke();
+  g.beginPath(); g.moveTo(walkRight, 0); g.lineTo(walkRight, h); g.stroke();
+  g.restore();
+
+  // Walkway paving joints: regular cross-slabs + alternating centre split.
+  {
+    const jointRng = makeLCG(0xF2D1A0);
+    g.save();
+    g.globalAlpha = 0.3;
+    g.strokeStyle = mortarHex;
+    g.lineWidth = Math.max(1, tW * 0.04);
+    for (let jy = SH; jy < h; jy += SH) {
+      g.beginPath(); g.moveTo(walkLeft, jy); g.lineTo(walkRight, jy); g.stroke();
+    }
+    for (let jy = 0; jy < h; jy += SH) {
+      if (jointRng() > 0.5) {
+        g.beginPath(); g.moveTo(wCenter, jy); g.lineTo(wCenter, jy + SH); g.stroke();
+      }
+    }
+    g.restore();
   }
-  for (const iy of inlayPositions) {
-    drawStarCrossMedallion(g, walkCenterX, iy, inlayRadius, medalStroke, walkDarkHex, 0.55);
+
+  // ── 6. Star/cross medallion runner down the walkway ───────────────────────
+  // A spine of geometric inlay medallions, only within the open plaza depth so
+  // none land under the south gate footprint.
+  const walkCenterX = wCenter;
+  const inlaySpacing = tH * 3.4;
+  const inlayRadius = walkWidth * 0.33;
+  for (let y = tH * 4.5; y < tH * 18.5; y += inlaySpacing) {
+    drawStarCrossMedallion(g, walkCenterX, y, inlayRadius, medalStroke, walkDarkHex, 0.7);
   }
 
   // ── 7. Herringbone brick border edging walkway ────────────────────────────
@@ -279,21 +326,17 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
   drawHerringboneBorder(g, walkRight + borderBandW, plazaBot - perimBandW * 0.9, (w - tW * 3 - walkRight - borderBandW), perimBandW * 0.9, bH2, bW2, brickDark, brickLight, brickMortarHex, 0.65);
 
   // ── 9. Marble inlay roundel medallions ────────────────────────────────────
-  // At deterministic positions across the open plaza
+  // A few elegant roundels — four flanking the walkway in the open plaza, none
+  // under the buildings. Subtle floor art, warm and light.
   const medalPositions: [number, number][] = [
-    [5.5,  6.5],
-    [5.5,  13.5],
-    [22.5, 6.5],
-    [22.5, 13.5],
-    [14,   plazaCenterRow],
-    [9.5,  11.0],
-    [18.5, 11.0],
+    [6.5,  7.0],
+    [6.5,  13.0],
+    [21.5, 7.0],
+    [21.5, 13.0],
   ];
-  const medalRadius = tW * 2.2;
+  const medalRadius = tW * 2.3;
   for (const [mc, mr] of medalPositions) {
-    const cx = mc * tW;
-    const cy = mr * tH;
-    drawRoundelMedallion(g, cx, cy, medalRadius, medalStroke, baseHex, walkHex);
+    drawRoundelMedallion(g, mc * tW, mr * tH, medalRadius, medalStroke, baseHex, walkHex);
   }
 
   // ── 10. Sand/dust drift weathering near edges & building bases ────────────
@@ -339,7 +382,7 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
       const drx = tW * (0.8 + dustRng() * 1.6);
       const dry = tH * (0.5 + dustRng() * 0.9);
       const grad = g.createRadialGradient(dx, dy, 0, dx, dy, drx);
-      grad.addColorStop(0, hex(lightenNum(stoneMortarNum, 0.15)));
+      grad.addColorStop(0, hex(lightenNum(0xd8c8a4, 0.12)));  // warm sand wash
       grad.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = grad;
       g.beginPath();
@@ -361,6 +404,30 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
 }
 
 // ── Sub-draw helpers ─────────────────────────────────────────────────────────
+
+/** Small 8-point star node for the plaza lattice intersections.
+ *  Filled soft buff + thin ink outline. Caller sets globalAlpha. */
+function drawInlayStarNode(
+  g: CanvasRenderingContext2D,
+  cx: number, cy: number, r: number,
+  inkHex: string, fillHex: string,
+): void {
+  const pts = 8;
+  g.beginPath();
+  for (let i = 0; i < pts * 2; i++) {
+    const a = (i / (pts * 2)) * Math.PI * 2 - Math.PI / 2;
+    const rad = i % 2 === 0 ? r : r * 0.46;
+    const px = cx + Math.cos(a) * rad;
+    const py = cy + Math.sin(a) * rad;
+    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+  }
+  g.closePath();
+  g.fillStyle = fillHex;
+  g.fill();
+  g.lineWidth = Math.max(0.6, r * 0.12);
+  g.strokeStyle = inkHex;
+  g.stroke();
+}
 
 /** Herringbone basket-weave brick border strip.
  *  Fills rect (x,y,bw,bh) with diagonal herringbone brick pattern. */
@@ -425,57 +492,65 @@ function drawHerringboneBorder(
   g.restore();
 }
 
-/** Draw a star/cross geometric inlay at (cx,cy) radius r.
- *  A 8-pointed star outline + inner cross + concentric rings. */
+/** Draw an interlaced 8-point star medallion at (cx,cy) radius r — the classic
+ *  girih motif: two overlaid squares forming an 8-point star, ringed, with a
+ *  filled core. `fillColor` lightly tints the star; `strokeColor` is the ink. */
 function drawStarCrossMedallion(
   g: CanvasRenderingContext2D,
   cx: number, cy: number, r: number,
   strokeColor: string, fillColor: string, alpha: number,
 ): void {
   g.save();
+  g.lineJoin = 'round';
+
+  // Outer + inner framing rings.
   g.globalAlpha = alpha;
   g.strokeStyle = strokeColor;
-  g.fillStyle = fillColor;
-  g.lineWidth = Math.max(0.8, r * 0.04);
+  g.lineWidth = Math.max(0.9, r * 0.045);
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = Math.max(0.7, r * 0.03);
+  g.globalAlpha = alpha * 0.8;
+  g.beginPath(); g.arc(cx, cy, r * 0.9, 0, Math.PI * 2); g.stroke();
 
-  // Outer circle
-  g.beginPath();
-  g.arc(cx, cy, r, 0, Math.PI * 2);
-  g.stroke();
-
-  // 8-pointed star path
-  const pts = 8;
-  g.beginPath();
-  for (let i = 0; i < pts * 2; i++) {
-    const angle = (i / (pts * 2)) * Math.PI * 2 - Math.PI / 2;
-    const rad = i % 2 === 0 ? r * 0.88 : r * 0.48;
-    const px = cx + Math.cos(angle) * rad;
-    const py = cy + Math.sin(angle) * rad;
-    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
-  }
-  g.closePath();
-  g.globalAlpha = alpha * 0.18;
-  g.fill();
-  g.globalAlpha = alpha;
-  g.stroke();
-
-  // Cross arms
-  g.lineWidth = Math.max(0.6, r * 0.025);
-  g.globalAlpha = alpha * 0.7;
-  for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2;
+  // Two overlaid squares (rotated 45°) → 8-point interlace star.
+  const sq = r * 0.86;
+  for (const rot of [0, Math.PI / 4]) {
     g.beginPath();
-    g.moveTo(cx, cy);
-    g.lineTo(cx + Math.cos(angle) * r * 0.88, cy + Math.sin(angle) * r * 0.88);
+    for (let i = 0; i < 4; i++) {
+      const a = rot + (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const px = cx + Math.cos(a) * sq;
+      const py = cy + Math.sin(a) * sq;
+      if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+    }
+    g.closePath();
+    // soft fill
+    g.globalAlpha = alpha * 0.16;
+    g.fillStyle = fillColor;
+    g.fill();
+    // ink outline
+    g.globalAlpha = alpha;
+    g.lineWidth = Math.max(0.8, r * 0.035);
+    g.strokeStyle = strokeColor;
     g.stroke();
   }
 
-  // Inner circle dot
-  g.globalAlpha = alpha * 0.5;
-  g.fillStyle = strokeColor;
+  // Inner octagon ring.
+  g.globalAlpha = alpha * 0.85;
+  g.lineWidth = Math.max(0.7, r * 0.03);
   g.beginPath();
-  g.arc(cx, cy, r * 0.09, 0, Math.PI * 2);
-  g.fill();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const px = cx + Math.cos(a) * r * 0.34;
+    const py = cy + Math.sin(a) * r * 0.34;
+    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+  }
+  g.closePath();
+  g.stroke();
+
+  // Centre dot.
+  g.globalAlpha = alpha * 0.7;
+  g.fillStyle = strokeColor;
+  g.beginPath(); g.arc(cx, cy, r * 0.1, 0, Math.PI * 2); g.fill();
 
   g.restore();
 }
@@ -487,7 +562,8 @@ function drawRoundelMedallion(
   strokeColor: string, _baseColor: string, accentHex: string,
 ): void {
   g.save();
-  g.globalAlpha = 0.22;
+  g.lineJoin = 'round';
+  g.globalAlpha = 0.34;
   g.strokeStyle = strokeColor;
   g.lineWidth = Math.max(0.8, r * 0.035);
 
@@ -500,7 +576,7 @@ function drawRoundelMedallion(
 
   // Petal ring: 12 arc-petals between inner rings
   const nPetals = 12;
-  g.globalAlpha = 0.14;
+  g.globalAlpha = 0.2;
   g.fillStyle = accentHex;
   for (let i = 0; i < nPetals; i++) {
     const angle = (i / nPetals) * Math.PI * 2;
@@ -515,7 +591,7 @@ function drawRoundelMedallion(
   }
 
   // Spoke lines
-  g.globalAlpha = 0.18;
+  g.globalAlpha = 0.26;
   g.strokeStyle = strokeColor;
   g.lineWidth = Math.max(0.5, r * 0.02);
   for (let i = 0; i < nPetals; i++) {
@@ -527,14 +603,14 @@ function drawRoundelMedallion(
   }
 
   // Center dot
-  g.globalAlpha = 0.25;
+  g.globalAlpha = 0.32;
   g.fillStyle = strokeColor;
   g.beginPath();
   g.arc(cx, cy, r * 0.06, 0, Math.PI * 2);
   g.fill();
 
   // Outer ring thick accent
-  g.globalAlpha = 0.12;
+  g.globalAlpha = 0.18;
   g.lineWidth = Math.max(1.5, r * 0.06);
   g.strokeStyle = strokeColor;
   g.beginPath();

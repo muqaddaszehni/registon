@@ -127,4 +127,3 @@ onTick(addDoves(scene, grid, () => hero.worldPos));
 onTick(addMotes(scene));
 
 export { scene, camera, renderer };
-(window as any).__scene = scene;

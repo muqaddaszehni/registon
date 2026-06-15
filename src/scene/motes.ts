@@ -15,31 +15,30 @@ import * as THREE from 'three';
  * NOTE: Controller must wire this — do NOT add to main.ts yourself.
  */
 export function addMotes(scene: THREE.Scene): (dt: number) => void {
-  const COUNT = 200;
+  const COUNT = 220;
   const positions = new Float32Array(COUNT * 3);
 
-  // Deterministic seeded positions using a simple LCG pattern
-  // Spread across the plaza area: x in [-18, 18], y in [0.5, 12], z in [-18, 18]
+  // Deterministic seeded positions using a simple LCG pattern.
+  // Spread across an air volume above the plaza so motes read as floating golden
+  // dust, NOT specks on the floor: y in [1.5, 13], x/z in a disc of radius ~17.
   for (let i = 0; i < COUNT; i++) {
-    // LCG seed: seed = (seed * 1664525 + 1013904223) & 0xffffffff
-    // Pre-computed distribution using prime-step sampling across the grid
     const t = i / COUNT;
-    const phi = i * 2.399963; // golden angle in radians — uniform sphere-like distribution
-    const r = Math.sqrt(t) * 18; // radial distance 0..18
-    positions[i * 3 + 0] = Math.cos(phi) * r;                           // x
-    positions[i * 3 + 1] = 0.5 + (((i * 7919) % 239) / 239) * 11.5;   // y: 0.5–12
-    positions[i * 3 + 2] = Math.sin(phi) * r;                           // z
+    const phi = i * 2.399963; // golden angle in radians — uniform disc distribution
+    const r = Math.sqrt(t) * 17; // radial distance 0..17
+    positions[i * 3 + 0] = Math.cos(phi) * r;                            // x
+    positions[i * 3 + 1] = 1.5 + (((i * 7919) % 239) / 239) * 11.5;    // y: 1.5–13 (off floor)
+    positions[i * 3 + 2] = Math.sin(phi) * r;                            // z
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
   const mat = new THREE.PointsMaterial({
-    color: 0xffcc66,      // warm golden-orange
-    size: 0.08,           // small — barely visible specks
+    color: 0xffd28a,      // warm golden, slightly paler so it glows not glares
+    size: 0.05,           // finer — reads as airborne dust, not dots
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.22,        // subtle — only catches where it crosses dark stone
     blending: THREE.AdditiveBlending,
     depthWrite: false,    // additive blend — don't write to depth buffer
   });
@@ -70,9 +69,9 @@ export function addMotes(scene: THREE.Scene): (dt: number) => void {
       arr[i * 3 + 1] += velocities[i * 3 + 1] * dt;
       arr[i * 3 + 2] += velocities[i * 3 + 2] * dt;
 
-      // Wrap y: when mote drifts above 14 units, reset to near ground
+      // Wrap y: when mote drifts above 14 units, reset to lower air band
       if (arr[i * 3 + 1] > 14) {
-        arr[i * 3 + 1] = 0.5;
+        arr[i * 3 + 1] = 1.5;
       }
       // Wrap x/z if drifted outside band (±20)
       if (Math.abs(arr[i * 3 + 0]) > 20) arr[i * 3 + 0] *= -0.9;
