@@ -160,11 +160,12 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   const sideXCenter = o.facadeLen / 2 - wingT / 2;
 
   for (const sgn of [-1, 1] as const) {
-    // Structural box — plain sand on the key faces
+    // Structural box — px/nx baked in here to avoid a separate overlapping face (z-fight).
     const sideWing = patternedBoxMulti(wingT, sideH, sideLen, C.sand, {
       pz: extTex,
       nz: extTex,
-      // px/nx courtyard/exterior faces will be covered by recessedHujraFace overlaid separately
+      px: extTex,   // outer/inner X faces textured directly — no separate overlay needed
+      nx: extTex,
     });
     sideWing.position.x = sgn * sideXCenter;
     sideWing.position.z = sideZCenter;
@@ -185,15 +186,8 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
     sideCourtArcade.position.set(innerXEdge, 0, sideZCenter);
     raised.add(sideCourtArcade);
 
-    // Exterior (outer X) face — brick texture only, no recessed arcade (side walls in refs
-    // are covered in tile pattern, not arcade — only the plaza and courtyard faces have hujras).
-    // The structural box already has extTex on unspecified faces, but we explicitly cover here:
-    const outerXEdge = sgn * o.facadeLen / 2;
-    const extBrickFace = patternedBoxMulti(0.06, sideH, sideLen, C.sand, {
-      px: extTex, nx: extTex,
-    });
-    extBrickFace.position.set(outerXEdge, 0, sideZCenter);
-    raised.add(extBrickFace);
+    // Exterior (outer X) face texture is now baked directly into sideWing above (px/nx).
+    // No separate overlay needed — avoids coplanar z-fighting.
   }
 
   // ── BACK WING ───────────────────────────────────────────────────
@@ -258,13 +252,19 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
     // i.e. y=wingH in raised-group space) up to the dome group origin (y=yLift above that).
     // Radii match the dome's drum so the stack is seamless and continuous.
     if (yLift > 0) {
-      const drumR = d.r * 0.72;
+      // drumR must match dome()'s own drum exactly: r * 0.74, bottom radius r * 0.74 * 1.04
+      const drumR = d.r * 0.74;
+      const drumRBottom = drumR * 1.04; // matches dome drum's bottom radius exactly
+      // Support height slightly exceeds yLift so it overlaps into the drum by 0.08,
+      // eliminating the coplanar joint (no z-fight, no visible gap).
+      const supportH = yLift + 0.08;
       const support = new THREE.Mesh(
-        new THREE.CylinderGeometry(drumR * 1.05, drumR * 1.12, yLift, 24),
+        new THREE.CylinderGeometry(drumRBottom, drumRBottom * 1.06, supportH, 24),
         new THREE.MeshLambertMaterial({ color: 0xc8b89a }), // warm sandstone
       );
-      // Bottom of support at wing roof (y=wingH), top at wing roof + yLift = domeY
-      support.position.set(d.offset, o.wingH + yLift / 2, domeZ);
+      // Center so bottom = wingH - 0.05 (slightly inside wing roof, no coplanar joint),
+      // top = wingH + yLift + 0.03 (overlaps into dome drum base, no gap/z-fight).
+      support.position.set(d.offset, o.wingH - 0.05 + supportH / 2, domeZ);
       support.castShadow = true;
       support.receiveShadow = true;
       raised.add(support);

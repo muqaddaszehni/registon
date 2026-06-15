@@ -323,7 +323,7 @@ export function pishtaq(
       return [plain, plain, plain, plain, new THREE.MeshLambertMaterial({ map: tex }), plain];
     })(),
   );
-  friezeMesh.position.set(0, h + 0.11, frontZ + 0.03);
+  friezeMesh.position.set(0, h + 0.11, frontZ + 0.06);  // back face at frontZ+0.03, clear of screen front
   g.add(friezeMesh);
 
   // Layer 2: middle recessed band — sits on top of the lip
@@ -759,37 +759,17 @@ export function minaret(h: number): THREE.Group {
     g.add(ring);
   }
 
-  // ── GALLERY (short cylinder with arch-panel band) ─────────────────
+  // ── DOME CAP (buff/sand sphere sits directly on cornice, no bare cylinder) ─
   const [lastYOff, , lastRH] = ringData[2];
-  const galleryBase = corniceBase + lastYOff * h + lastRH;
-  const galleryR    = rTop * 1.32;
-  const galleryH    = h * 0.065;
-  const galleryTex  = archPanel(256, 128);
-  const gallery = new THREE.Mesh(
-    new THREE.CylinderGeometry(galleryR, galleryR, galleryH, 16),
-    new THREE.MeshLambertMaterial({ map: galleryTex }),
-  );
-  gallery.position.y = galleryBase + galleryH / 2;
-  g.add(gallery);
-
-  // ── CROWN RAILING (slim ring above gallery, just below cap) ──────
-  const crownRailing = new THREE.Mesh(
-    new THREE.CylinderGeometry(galleryR * 1.05, galleryR, h * 0.010, 16),
-    mat(C.sandLight),
-  );
-  crownRailing.position.y = galleryBase + galleryH + h * 0.005;
-  g.add(crownRailing);
-
-  // ── DOME CAP (buff/sand sphere — NOT turquoise, refs show buff caps) ─
-  const capBase = galleryBase + galleryH + h * 0.012;
-  const capR    = galleryR * 0.80;
+  const capBase = corniceBase + lastYOff * h + lastRH + h * 0.008;
+  const capR    = rTop * 1.05;  // slightly wider than top cornice ring for a clean shoulder
   const cap = new THREE.Mesh(new THREE.SphereGeometry(capR, 12, 10), mat(C.sand));
-  cap.position.y = capBase + capR * 0.85;
+  cap.position.y = capBase + capR * 0.82;
   g.add(cap);
 
   // ── FINIAL ────────────────────────────────────────────────────────
   const finial = new THREE.Mesh(new THREE.SphereGeometry(capR * 0.22, 8, 8), mat(C.gold));
-  finial.position.y = capBase + capR * 1.75;
+  finial.position.y = capBase + capR * 1.68;
   g.add(finial);
 
   return g;
@@ -1044,7 +1024,7 @@ export function recessedHujraFace(
     new THREE.BoxGeometry(len, 0.08, 0.10),
     new THREE.MeshLambertMaterial({ color: C.cobalt }),
   );
-  dadoTrim.position.set(0, DADO_H + 0.04, SCREEN_FRONT + 0.02);
+  dadoTrim.position.set(0, DADO_H + 0.04, SCREEN_FRONT + 0.08);  // 0.08 proud of screen front, clear of frame front (0.64)
   g.add(dadoTrim);
 
   // ── 2. ARCADE SCREEN (two storeys of punched arches) ─────────────
@@ -1097,8 +1077,8 @@ export function recessedHujraFace(
 
   const FRAME_DEPTH   = 0.10;
   const OUTLINE_DEPTH = 0.07;
-  const frameZ   = PROUD + 0.02;
-  const outlineZ = PROUD + 0.10;
+  const frameZ   = PROUD + 0.02;  // frame front at PROUD+0.02 (0.64)
+  const outlineZ = PROUD + 0.14;  // outline front at PROUD+0.14 (0.76) — clear of cornice trim (0.68) and frame (0.64)
   const pilasterW = Math.min(bayW * 0.22, 0.9);
   const pilasterFront = SCREEN_FRONT + 0.06;
   const pilasterD = pilasterFront + 0.02;
@@ -1178,7 +1158,7 @@ export function recessedHujraFace(
   for (let b = 0; b <= bays; b++) {
     const bx = (b * bayW) - len / 2;
     pushBox(pilasterGeos, pilasterW, arcadeH, pilasterD, bx, DADO_H + arcadeH / 2, pilasterZCenter);
-    pushBox(accentGeos, pilasterW * 0.22, arcadeH * 0.9, 0.06, bx, DADO_H + arcadeH / 2, PROUD + 0.10);
+    pushBox(accentGeos, pilasterW * 0.22, arcadeH * 0.9, 0.06, bx, DADO_H + arcadeH / 2, PROUD + 0.18);  // proud of outline rings (0.76) by 0.02
   }
 
   // Merge each bin into ONE mesh.
@@ -1234,7 +1214,7 @@ export function recessedHujraFace(
       emissiveIntensity: 0.14,
     }),
   );
-  corniceUnderTrim.position.set(0, corniceY + 0.035, SCREEN_FRONT + 0.04);
+  corniceUnderTrim.position.set(0, corniceY + 0.035, SCREEN_FRONT + 0.08);  // 0.08 proud of screen, clear of frame/outline
   g.add(corniceUnderTrim);
 
   return g;
