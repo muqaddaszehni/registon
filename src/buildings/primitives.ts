@@ -809,3 +809,381 @@ export function arcadeWall(
 
   return g;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REAL RECESSED HUJRA ARCADES
+// Each facade gets a genuine 3-D screen with punched pointed-arch holes, a
+// recessed back wall behind the openings, and all the framing relief layers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a multi-hole ExtrudeGeometry for one storey of N pointed-arch niches.
+ * The solid rectangle is len × storyH; each arch is a hole punched through it.
+ * Extruded to `depth` in +Z (caller positions it so +Z faces outward/plaza).
+ *
+ * archW: width of each arch opening
+ * archSpring: height of springing (base of the curved part)
+ * archApex: height of arch apex tip
+ */
+function hujraStoryGeometry(
+  len: number,
+  storyH: number,
+  bays: number,
+  archWFrac: number,   // arch width as fraction of bay width
+  springFrac: number,  // springing height as fraction of storyH
+  apexFrac: number,    // apex height as fraction of storyH
+  depth: number,
+): THREE.ExtrudeGeometry {
+  const shape = new THREE.Shape();
+  // Outer rectangle (origin bottom-left)
+  shape.moveTo(0, 0);
+  shape.lineTo(len, 0);
+  shape.lineTo(len, storyH);
+  shape.lineTo(0, storyH);
+  shape.closePath();
+
+  const bayW   = len / bays;
+  const aw     = bayW * archWFrac;
+  const spring = storyH * springFrac;
+  const apex   = storyH * apexFrac;
+
+  for (let b = 0; b < bays; b++) {
+    const cx = (b + 0.5) * bayW;  // bay centre x
+    const hole = new THREE.Path();
+    // Bottom-left of arch opening, go around counter-clockwise (hole winding)
+    hole.moveTo(cx - aw / 2, 0.01);
+    hole.lineTo(cx + aw / 2, 0.01);
+    hole.lineTo(cx + aw / 2, spring);
+    // Right bezier side up to apex
+    hole.bezierCurveTo(
+      cx + aw / 2, spring + (apex - spring) * 0.55,
+      cx + aw * 0.30, apex - (apex - spring) * 0.18, cx, apex,
+    );
+    // Left bezier side down from apex
+    hole.bezierCurveTo(
+      cx - aw * 0.30, apex - (apex - spring) * 0.18,
+      cx - aw / 2, spring + (apex - spring) * 0.55, cx - aw / 2, spring,
+    );
+    hole.closePath();
+    shape.holes.push(hole);
+  }
+
+  return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+}
+
+/**
+ * Recessed hujra arcade face — the crown jewel replacement for flat arcadeFacade texture.
+ *
+ * Builds a face Group that goes on ONE facade surface (e.g. +Z face of a wing):
+ *   • 2-storey arcade screen: extruded proud stone wall with punched pointed-arch holes
+ *   • Recessed back wall: darker sand plane, `recessDepth` behind the screen face
+ *   • Dado (marble band) at base
+ *   • Kufic inscription cornice band at top
+ *   • Pilaster strips between bays (thin cobalt boxes, slightly proud of screen face)
+ *   • Spandrel tile rosettes on the screen between arches
+ *
+ * Position: the Group's local origin is at the facade surface.
+ * The screen front face sits at z=0; everything recesses in −Z.
+ * Caller rotates/positions this group onto the correct wing face.
+ *
+ * len, h  : world dimensions of this facade face
+ * bays    : number of arch bays (typically 2–7 per wing)
+ * goldTrim: TK-style gold accent lines in kufic band
+ * wingStyle: controls screen and pilaster material palette
+ */
+export function recessedHujraFace(
+  len: number,
+  h: number,
+  bays: number,
+  opts: {
+    goldTrim?: boolean;
+    wingStyle?: 'diagonal-lattice' | 'meander' | 'arch-floral';
+    isGroundFloor?: boolean; // ground floor niches read darker (doorways)
+  } = {},
+): THREE.Group {
+  const g = new THREE.Group();
+  const goldTrim   = opts.goldTrim   ?? false;
+  const wingStyle  = opts.wingStyle  ?? 'diagonal-lattice';
+
+  // ── PROPORTIONS ──────────────────────────────────────────────────
+  // PROUD: the entire arcade Group sits PROUD of the box face by this amount,
+  // preventing z-fighting between the box's plain face and the screen front face.
+  const PROUD = 0.06;
+  const SCREEN_DEPTH  = 0.45;  // thickness of the proud arcade screen slab (thinner = bigger holes)
+  const RECESS_DEPTH  = 1.00;  // deep recess — more depth = darker shadow
+  // Screen front face: at z=+PROUD (slightly proud of box face at z=0).
+  // Screen back face: at z=+PROUD - SCREEN_DEPTH = -0.39 (into the wing).
+  // Back wall:        at z = PROUD - SCREEN_DEPTH - RECESS_DEPTH = -1.39.
+  const BACK_Z = PROUD - SCREEN_DEPTH - RECESS_DEPTH;  // ~−1.39
+
+  const DADO_H       = h * 0.09;  // marble dado band at base
+  const CORNICE_H    = h * 0.10;  // kufic inscription cornice band
+  const arcadeH      = h - DADO_H - CORNICE_H;
+
+  // Two storeys of equal height
+  const STORIES = 2;
+  const storyH = arcadeH / STORIES;
+
+  // Arch proportions: wider arches (78% bay) for more prominent openings
+  // High spring (46%) + tall apex (80%) → deep pointed Persian arch
+  const ARCH_W_FRAC  = 0.78;
+  const SPRING_FRAC  = 0.46;
+  const APEX_FRAC    = 0.80;
+
+  // ── MATERIALS ─────────────────────────────────────────────────────
+  // Screen (arcade wall slab) — buff sandstone front + sides.
+  // Keep the screen face plain warm sand so the dark arch holes maximally contrast.
+  // Tilework lives on pilasters and cornice, not the spandrel stone.
+  const screenFrontMat = new THREE.MeshLambertMaterial({ color: C.sand });
+  const screenSideMat  = new THREE.MeshLambertMaterial({ color: C.sandDark });
+
+  // Niche back wall — near-black to maximise shadow contrast through the arch holes.
+  // DoubleSide so it renders regardless of which way the Group is rotated (courtyard vs plaza).
+  const backWallColor = 0x1a100a;  // near-black — deep iwan shadow
+  const backWallMat   = new THREE.MeshLambertMaterial({
+    color: backWallColor,
+    side: THREE.DoubleSide,
+  });
+
+  // Dado
+  const dadoMat = new THREE.MeshLambertMaterial({ color: C.marble });
+
+  // Pilaster strips — cobalt, slightly proud
+  const pilasterMat   = new THREE.MeshLambertMaterial({ color: C.cobalt });
+
+  // ── 1. DADO (marble base band) ────────────────────────────────────
+  // Extends from the face outward (PROUD) then inward (SCREEN_DEPTH)
+  const dadoD = PROUD + SCREEN_DEPTH + 0.04;  // full dado depth
+  const dadoMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(len, DADO_H, dadoD),
+    dadoMat,
+  );
+  // Centre z so front face is at z=PROUD, back at z=PROUD-dadoD
+  dadoMesh.position.set(0, DADO_H / 2, PROUD - dadoD / 2);
+  g.add(dadoMesh);
+
+  // Dado top trim line (thin cobalt strip at dado top, proud of screen face)
+  const dadoTrim = new THREE.Mesh(
+    new THREE.BoxGeometry(len, 0.06, PROUD + 0.05),
+    new THREE.MeshLambertMaterial({ color: C.cobalt }),
+  );
+  dadoTrim.position.set(0, DADO_H + 0.03, (PROUD + 0.05) / 2 - (PROUD + 0.05) + PROUD);
+  g.add(dadoTrim);
+
+  // ── 2. ARCADE SCREEN (two storeys of punched arches) ─────────────
+  // ExtrudeGeometry: shape in XY plane, extruded in +Z from z=0 to z=SCREEN_DEPTH.
+  // We want:  front (outward) face at z=PROUD, back face at z=PROUD-SCREEN_DEPTH.
+  // So position.z = PROUD - SCREEN_DEPTH (shape's z=0 → world z = PROUD-SCREEN_DEPTH = -0.45).
+  // The extrusion goes +Z to z=PROUD-SCREEN_DEPTH+SCREEN_DEPTH = PROUD = 0.05. ✓
+  const SCREEN_Z_ORIGIN = PROUD - SCREEN_DEPTH;  // z-position of the shape (back of slab)
+
+  for (let s = 0; s < STORIES; s++) {
+    const storyYBase = DADO_H + s * storyH;
+
+    const geo = hujraStoryGeometry(
+      len, storyH, bays,
+      ARCH_W_FRAC, SPRING_FRAC, APEX_FRAC,
+      SCREEN_DEPTH,
+    );
+
+    const screenMesh = new THREE.Mesh(geo, [screenFrontMat, screenSideMat]);
+    // shape coords: x in 0..len, y in 0..storyH. Centre x by shifting -len/2.
+    screenMesh.position.set(-len / 2, storyYBase, SCREEN_Z_ORIGIN);
+    screenMesh.castShadow = true;
+    screenMesh.receiveShadow = true;
+    g.add(screenMesh);
+  }
+
+  // ── 3. RECESSED BACK WALL ─────────────────────────────────────────
+  // A thin box (not PlaneGeometry) so it has proper faces regardless of rotation.
+  // Sits at z = BACK_Z, rendering as a deep dark surface visible through arch holes.
+  const backWall = new THREE.Mesh(
+    new THREE.BoxGeometry(len, arcadeH, 0.08),
+    backWallMat,
+  );
+  backWall.position.set(0, DADO_H + arcadeH / 2, BACK_Z);
+  backWall.receiveShadow = true;
+  g.add(backWall);
+
+  // ── 4. NICHE SIDE WALLS (returns) ────────────────────────────────
+  // Thin vertical planes on each arch side to close the niche into a real cell.
+  // One pair per bay (left/right reveals). Just the rectangular part below the arch spring.
+  const bayW      = len / bays;
+  const archW     = bayW * ARCH_W_FRAC;
+  const returnH   = SPRING_FRAC * storyH;  // height of straight-sided reveal (below spring)
+  // Full niche depth from the front face (PROUD) to the back wall
+  const returnDepth = PROUD + SCREEN_DEPTH + RECESS_DEPTH;
+  const returnZCenter = PROUD - returnDepth / 2;  // z-centre of the return panel
+
+  const returnMat = new THREE.MeshLambertMaterial({
+    color: 0x6a5030,  // mid-shadow sandstone
+    side: THREE.DoubleSide,
+  });
+
+  for (let s = 0; s < STORIES; s++) {
+    const sBaseY = DADO_H + s * storyH;
+    for (let b = 0; b < bays; b++) {
+      const cx = (b + 0.5) * bayW - len / 2;  // bay centre in local coords
+      const halfA = archW / 2;
+
+      // Left return (at x = cx - halfA)
+      const leftReturn = new THREE.Mesh(
+        new THREE.PlaneGeometry(returnDepth, returnH),
+        returnMat,
+      );
+      leftReturn.rotation.y = Math.PI / 2;
+      leftReturn.position.set(cx - halfA, sBaseY + returnH / 2, returnZCenter);
+      g.add(leftReturn);
+
+      // Right return
+      const rightReturn = new THREE.Mesh(
+        new THREE.PlaneGeometry(returnDepth, returnH),
+        returnMat,
+      );
+      rightReturn.rotation.y = -Math.PI / 2;
+      rightReturn.position.set(cx + halfA, sBaseY + returnH / 2, returnZCenter);
+      g.add(rightReturn);
+
+      // Niche sill (floor of the niche at ground storey base, above dado)
+      if (s === STORIES - 1) {
+        const sill = new THREE.Mesh(
+          new THREE.BoxGeometry(archW + 0.04, 0.08, returnDepth),
+          new THREE.MeshLambertMaterial({ color: C.marble }),
+        );
+        sill.position.set(cx, sBaseY + 0.04, returnZCenter);
+        g.add(sill);
+      }
+    }
+  }
+
+  // ── 5. PILASTER STRIPS between bays ──────────────────────────────
+  // Cobalt tiles between bays, proud of screen face to create layered relief.
+  const pilasterW = bayW * 0.10;
+  // Pilaster extends from back of niche to beyond the screen face (proud)
+  const pilasterD = SCREEN_DEPTH + RECESS_DEPTH + 0.10;
+  const pilasterZCenter = PROUD - pilasterD / 2;
+  for (let b = 0; b <= bays; b++) {
+    const bx = (b * bayW) - len / 2;  // pilaster centre x
+    const pilaster = new THREE.Mesh(
+      new THREE.BoxGeometry(pilasterW, arcadeH, pilasterD),
+      pilasterMat,
+    );
+    pilaster.position.set(bx, DADO_H + arcadeH / 2, pilasterZCenter);
+    pilaster.castShadow = true;
+    g.add(pilaster);
+
+    // Gold/turquoise tile accent face on pilaster front (+Z face)
+    const accentColor = (wingStyle === 'arch-floral') ? C.gold : C.turquoise;
+    const accentMat = new THREE.MeshLambertMaterial({
+      color: accentColor,
+      emissive: new THREE.Color(accentColor),
+      emissiveIntensity: 0.10,
+    });
+    const pilasterAccent = new THREE.Mesh(
+      new THREE.BoxGeometry(pilasterW * 0.55, arcadeH * 0.88, 0.07),
+      accentMat,
+    );
+    // Front face of pilaster is at z = PROUD + 0.10/2 ≈ PROUD + 0.05; accent sits at pilasterZCenter + pilasterD/2 + 0.035
+    pilasterAccent.position.set(bx, DADO_H + arcadeH / 2, PROUD + 0.035);
+    g.add(pilasterAccent);
+  }
+
+  // ── 6. ARCH OUTLINES (turquoise moulding ring around each arch) ───
+  // Thin proud ring following the arch opening profile, sitting just in front
+  // of the screen face (at z = PROUD + 0.04).
+  const archOutlineMat = new THREE.MeshLambertMaterial({
+    color: C.turquoise,
+    emissive: new THREE.Color(C.turquoise),
+    emissiveIntensity: 0.14,
+  });
+  const OUTLINE_W = bayW * 0.038;  // ring half-width
+  const OUTLINE_DEPTH = 0.07;
+  const outlineZ = PROUD + 0.04;  // proud of screen front face
+
+  for (let s = 0; s < STORIES; s++) {
+    const sBaseY = DADO_H + s * storyH;
+    for (let b = 0; b < bays; b++) {
+      const cx = (b + 0.5) * bayW;      // in 0..len space
+      const aw  = bayW * ARCH_W_FRAC;
+      const sp  = storyH * SPRING_FRAC;
+      const ap  = storyH * APEX_FRAC;
+
+      // Ring shape: area between outer and inner arch profiles
+      const outShape = new THREE.Shape();
+      const ow = aw + OUTLINE_W * 2;
+      // Outer arch path (counter-clockwise from bottom-left)
+      outShape.moveTo(cx - ow / 2, 0);
+      outShape.lineTo(cx - ow / 2, sp + OUTLINE_W);
+      outShape.bezierCurveTo(
+        cx - ow / 2, sp + OUTLINE_W + (ap - sp) * 0.55,
+        cx - aw * 0.30 - OUTLINE_W * 0.7, ap + OUTLINE_W - (ap - sp) * 0.18,
+        cx, ap + OUTLINE_W,
+      );
+      outShape.bezierCurveTo(
+        cx + aw * 0.30 + OUTLINE_W * 0.7, ap + OUTLINE_W - (ap - sp) * 0.18,
+        cx + ow / 2, sp + OUTLINE_W + (ap - sp) * 0.55,
+        cx + ow / 2, sp + OUTLINE_W,
+      );
+      outShape.lineTo(cx + ow / 2, 0);
+      // Inner cutout — back to arch hole shape
+      outShape.lineTo(cx + aw / 2, 0);
+      outShape.lineTo(cx + aw / 2, sp);
+      outShape.bezierCurveTo(
+        cx + aw / 2, sp + (ap - sp) * 0.55,
+        cx + aw * 0.30, ap - (ap - sp) * 0.18, cx, ap,
+      );
+      outShape.bezierCurveTo(
+        cx - aw * 0.30, ap - (ap - sp) * 0.18,
+        cx - aw / 2, sp + (ap - sp) * 0.55, cx - aw / 2, sp,
+      );
+      outShape.lineTo(cx - aw / 2, 0);
+      outShape.closePath();
+
+      const outGeo = new THREE.ExtrudeGeometry(outShape, { depth: OUTLINE_DEPTH, bevelEnabled: false });
+      const outMesh = new THREE.Mesh(outGeo, archOutlineMat);
+      // Extrusion +Z from z=0; shift so back face is at outlineZ - OUTLINE_DEPTH, front at outlineZ
+      outMesh.position.set(-len / 2, sBaseY, outlineZ - OUTLINE_DEPTH);
+      outMesh.castShadow = false;
+      g.add(outMesh);
+    }
+  }
+
+  // ── 7. KUFIC INSCRIPTION CORNICE BAND ────────────────────────────
+  // Cobalt band with white kufic at the top of the facade, above the arcade stories.
+  const corniceTex = calligraphyBand(C.cobalt, 0xfff6e3);
+  corniceTex.wrapS = corniceTex.wrapT = THREE.RepeatWrapping;
+  corniceTex.repeat.set(Math.max(1, Math.round(len / 5)), 1);
+  const corniceY = DADO_H + arcadeH;  // top of arcade zone
+  const corniceD = PROUD + SCREEN_DEPTH + 0.04;  // cornice depth from back
+  const corniceZCenter = PROUD - corniceD / 2;
+
+  const corniceMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(len, CORNICE_H, corniceD),
+    [
+      new THREE.MeshLambertMaterial({ color: C.cobalt }),   // +x
+      new THREE.MeshLambertMaterial({ color: C.cobalt }),   // -x
+      new THREE.MeshLambertMaterial({ color: C.cobalt }),   // +y (top)
+      new THREE.MeshLambertMaterial({ color: C.cobalt }),   // -y
+      new THREE.MeshLambertMaterial({ map: corniceTex }),   // +z (front/plaza face)
+      new THREE.MeshLambertMaterial({ color: C.cobalt }),   // -z
+    ],
+  );
+  corniceMesh.position.set(0, corniceY + CORNICE_H / 2, corniceZCenter);
+  corniceMesh.castShadow = true;
+  g.add(corniceMesh);
+
+  // Coloured trim line under the cornice
+  const trimColor = goldTrim ? C.gold : C.turquoise;
+  const corniceUnderTrim = new THREE.Mesh(
+    new THREE.BoxGeometry(len, 0.07, PROUD + 0.08),
+    new THREE.MeshLambertMaterial({
+      color: trimColor,
+      emissive: new THREE.Color(trimColor),
+      emissiveIntensity: 0.14,
+    }),
+  );
+  corniceUnderTrim.position.set(0, corniceY + 0.035, (PROUD + 0.08) / 2 - (PROUD + 0.08) + PROUD);
+  g.add(corniceUnderTrim);
+
+  return g;
+}

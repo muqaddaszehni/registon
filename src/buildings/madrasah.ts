@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { pishtaq, minaret, dome, shadowed, patternedBoxMulti } from './primitives';
+import { pishtaq, minaret, dome, shadowed, patternedBoxMulti, recessedHujraFace } from './primitives';
 import { C } from '../palette';
-import { bannai, arcadeFacade, brickWall, type PortalVariant } from '../patterns/textures';
+import { bannai, brickWall, type PortalVariant } from '../patterns/textures';
 
 export interface MadrasahOpts {
   facadeLen: number;        // total width along its plaza edge
@@ -102,25 +102,47 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
     extTex = brickWall(C.sand, C.cream, C.cobalt);
   }
 
+  // Helper: compute how many bays fit in a given length.
+  // Larger bays = bigger, more legible arches. ~3.0 wu/bay, min 2.
+  const bayCount = (len: number) => Math.max(2, Math.round(len / 3.0));
+
   // ── FRONT WING — two flanking segments (fix 1) ──────────────────
   // The pishtaq occupies the central portalW gap; no wing volume behind the portal.
   // Each segment: width = (facadeLen - portalW) / 2, height = wingH, depth = frontD.
   const portalW = o.portal.w;
   const segW = (o.facadeLen - portalW) / 2;
   const segXCenter = portalW / 2 + segW / 2;
-  // Each segment gets its own arcade facade scaled to segW.
+
   for (const sgn of [-1, 1] as const) {
-    const segArcade   = arcadeFacade(segW, o.wingH, goldTrim);
-    const segInterior = arcadeFacade(segW, o.wingH, false);
+    // Structural box — plain sand on pz (+Z plaza) and nz (-Z courtyard) since
+    // those faces will be covered by recessedHujraFace overlays.
+    // px/nx are the end-grain sides visible between the portal and minaret.
     const seg = patternedBoxMulti(segW, o.wingH, frontD, C.sand, {
-      pz: segArcade,
-      nz: segInterior,
-      px: extTex,
-      nx: extTex,
+      px: extTex,   // right end face (exposed to sides)
+      nx: extTex,   // left end face (exposed to sides)
+      // pz and nz left plain — both covered by recessedHujraFace
     });
     seg.position.x = sgn * segXCenter;
     seg.position.z = 0;
     raised.add(seg);
+
+    // Plaza-facing recessed arcade (+Z face at z = +frontD/2)
+    const frontArcade = recessedHujraFace(segW, o.wingH, bayCount(segW), {
+      goldTrim, wingStyle: o.wingStyle,
+    });
+    // Screen front at local z=0; we want it at world z=frontD/2 relative to raised group.
+    // Group origin at (sgn * segXCenter, 0, frontD/2), no rotation needed since +Z = plaza.
+    frontArcade.position.set(sgn * segXCenter, 0, frontD / 2);
+    raised.add(frontArcade);
+
+    // Courtyard-facing recessed arcade (-Z face at z = -frontD/2)
+    // Rotate 180° around Y so the screen's -Z becomes the facing direction, recessing into the wing (+Z).
+    const courtArcade = recessedHujraFace(segW, o.wingH, bayCount(segW), {
+      goldTrim: false, wingStyle: o.wingStyle,
+    });
+    courtArcade.rotation.y = Math.PI;
+    courtArcade.position.set(sgn * segXCenter, 0, -frontD / 2);
+    raised.add(courtArcade);
   }
 
   // ── PORTAL (pishtaq stands in the central gap — no wing body behind it) ────
@@ -135,40 +157,66 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   // sideLen is already shortened (fix 4) so wings butt against back wing's inner face.
   // sideXCenter: outer edge at ±facadeLen/2, inner at ±(facadeLen/2 - wingT).
   // Center: ±(facadeLen/2 - wingT/2).
-  const sideXCenter  = o.facadeLen / 2 - wingT / 2;
-  const sideInterior = arcadeFacade(sideLen, sideH, false);
+  const sideXCenter = o.facadeLen / 2 - wingT / 2;
 
   for (const sgn of [-1, 1] as const) {
-    // sgn=-1: left wing (−X outer), interior = +X face
-    // sgn=+1: right wing (+X outer), interior = −X face
+    // Structural box — plain sand on the key faces
     const sideWing = patternedBoxMulti(wingT, sideH, sideLen, C.sand, {
-      px: sgn < 0 ? sideInterior : extTex,
-      nx: sgn > 0 ? sideInterior : extTex,
       pz: extTex,
       nz: extTex,
-      // py omitted → plain sand roof
+      // px/nx courtyard/exterior faces will be covered by recessedHujraFace overlaid separately
     });
-    // patternedBoxMulti sets y internally; set only X and Z
     sideWing.position.x = sgn * sideXCenter;
     sideWing.position.z = sideZCenter;
     raised.add(sideWing);
+
+    // Courtyard-facing recessed arcade on the inner X face (faces toward x=0)
+    // sgn=+1 right wing: courtyard face is -X → place at x = sideXCenter - wingT/2 = facadeLen/2-wingT
+    // sgn=-1 left wing: courtyard face is +X → place at x = -(facadeLen/2-wingT)
+    const innerXEdge = sgn * (o.facadeLen / 2 - wingT); // inner face x position
+    const sideCourtArcade = recessedHujraFace(sideLen, sideH, bayCount(sideLen), {
+      goldTrim: false, wingStyle: o.wingStyle,
+    });
+    // For sgn=+1: inner face is at -X direction; screen should face -X (toward x=0)
+    // recessedHujraFace screen faces +Z; rotate -90°Y → faces +X; then another 180° → faces -X for sgn=+1
+    // Simpler: sgn=+1 inner face needs the screen to face -X, so rotate Y by +90°.
+    // sgn=-1 inner face needs screen to face +X, rotate Y by -90°.
+    sideCourtArcade.rotation.y = -sgn * Math.PI / 2;
+    sideCourtArcade.position.set(innerXEdge, 0, sideZCenter);
+    raised.add(sideCourtArcade);
+
+    // Exterior (outer X) face — brick texture only, no recessed arcade (side walls in refs
+    // are covered in tile pattern, not arcade — only the plaza and courtyard faces have hujras).
+    // The structural box already has extTex on unspecified faces, but we explicitly cover here:
+    const outerXEdge = sgn * o.facadeLen / 2;
+    const extBrickFace = patternedBoxMulti(0.06, sideH, sideLen, C.sand, {
+      px: extTex, nx: extTex,
+    });
+    extBrickFace.position.set(outerXEdge, 0, sideZCenter);
+    raised.add(extBrickFace);
   }
 
   // ── BACK WING ───────────────────────────────────────────────────
   // Width=facadeLen, height=sideH, depth=wingT.
-  // +Z face (courtyard-facing): interior arcade.
+  // +Z face (courtyard-facing): recessed arcade.
   // -Z face (exterior back): brick.
-  const backInterior = arcadeFacade(o.facadeLen, sideH, false);
   const backWing = patternedBoxMulti(o.facadeLen, sideH, wingT, C.sand, {
-    pz: backInterior,
     nz: extTex,
     px: extTex,
     nx: extTex,
-    // py omitted → plain sand roof
+    // pz courtyard face covered by recessedHujraFace
   });
   backWing.position.x = 0;
   backWing.position.z = backZCenter;
   raised.add(backWing);
+
+  // Back wing courtyard face (+Z = toward courtyard)
+  const backCourtArcade = recessedHujraFace(o.facadeLen, sideH, bayCount(o.facadeLen), {
+    goldTrim: false, wingStyle: o.wingStyle,
+  });
+  // +Z face is at z = backZCenter + wingT/2
+  backCourtArcade.position.set(0, 0, backZCenter + wingT / 2);
+  raised.add(backCourtArcade);
 
   // ── COURTYARD FLOOR ─────────────────────────────────────────────
   // Fills the open courtyard between the four wings.
