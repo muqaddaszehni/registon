@@ -405,6 +405,9 @@ export function pishtaq(
   }
 
   // ── IWAN BACK WALL (rich mosaic texture) ──────────────────────────
+  // DoubleSide so the wall also closes the iwan from BEHIND. The pishtaq stands
+  // open-backed over the hollow courtyard; without a back face you see straight
+  // through the arch from the rear and the muqarnas cells read as floating steps.
   const iwanTex = iwanTexture(variant);
   const backWall = new THREE.Mesh(
     new THREE.PlaneGeometry(aw + 0.4, apex + 0.4),
@@ -412,6 +415,7 @@ export function pishtaq(
       map: iwanTex,
       emissive: new THREE.Color(C.lapis),
       emissiveIntensity: 0.20,
+      side: THREE.DoubleSide,
     }),
   );
   backWall.position.set(0, (apex + 0.4) / 2, backZ + 0.07);
@@ -425,14 +429,26 @@ export function pishtaq(
  *                 via custom BufferGeometry with r(θ,φ) = profile(θ) * (1 + A·cos(N·φ))
  *  ribbed=false → smooth onion dome (Tilya-Kori style): tall narrow onion lathe
  */
-export function dome(r: number, ribbed = false): THREE.Group {
+/** Dome drum radius as a fraction of the nominal dome radius `r`.
+ *  Shared so the support-drum in madrasah.ts seats seamlessly under the dome.
+ *  Widened from 0.74 → 0.86: a thin drum under a wide belly read as an umbrella;
+ *  a wide drum lets the onion bulb sit on it with only a modest overhang. */
+export const DRUM_R_FACTOR = 0.86;
+
+export function dome(r: number, ribbed = false, glaze: number = C.turquoise): THREE.Group {
   const g = new THREE.Group();
+  // Glaze tones derived from the base color: a dark valley + bright ridge for the
+  // ribbed stripe map, so each dome's fluting reads in its own hue.
+  const glazeCol = new THREE.Color(glaze);
+  const valleyHex = '#' + glazeCol.clone().multiplyScalar(0.42).getHexString();
+  const ridgeHex  = '#' + glazeCol.clone().lerp(new THREE.Color(0xffffff), 0.32).getHexString();
+  const baseHex   = '#' + glazeCol.getHexString();
 
   // ── TALL INSCRIPTION DRUM ────────────────────────────────────────
   // Refs (every Registan dome) show a tall cylindrical drum carrying a grand
   // kufic inscription band, crowned by an arcaded gallery of small arched niches.
   const drumH = r * 1.05;             // tall drum (was 0.75) — dominant vertical
-  const drumR  = r * 0.74;
+  const drumR  = r * DRUM_R_FACTOR;
   const drumTex = drumBand();
   drumTex.repeat.set(Math.max(2, Math.round(drumR * 2 * Math.PI / 3)), 1);
   const drum = new THREE.Mesh(
@@ -508,18 +524,19 @@ export function dome(r: number, ribbed = false): THREE.Group {
 
   // ── SHARED ONION PROFILE ──────────────────────────────────────────
   // Piecewise-linear control points: (t, radius).
-  // capH = 2.0r → dome is 2× taller than its belly width → tall onion not flat saucer.
-  // Peak belly only 5% wider than r so the dome reads as compact/spherical, not bulging.
-  const capH = r * 1.78;  // slightly lower → fuller, less tent-like
+  // The bulb SPRINGS from the drum (base radius = drum top) and bulges only
+  // modestly past it (belly ≈ 1.21× drum), then necks to a point — a tall onion,
+  // NOT a wide canopy overhanging a thin stem (which read as a mushroom/umbrella).
+  const capH = r * 1.95;  // tall bulb: height ≈ belly diameter
 
   const CTRL: [number, number][] = [
-    [0.00, drumR],        // base: smooth join to collar
-    [0.12, r * 1.02],    // quick rise from collar
-    [0.30, r * 1.18],    // widest belly — full bulbous swell (refs)
-    [0.48, r * 1.02],    // gentle shoulder — stays plump, no hard pinch
-    [0.66, r * 0.62],    // smooth neck
-    [0.82, r * 0.28],    // taper toward apex
-    [0.93, r * 0.11],    // rounded near-apex (non-tent)
+    [0.00, drumR * 1.03], // base: seats flush on the collar top (no skirt/ledge)
+    [0.12, r * 0.98],     // springs upward and slightly out from the drum
+    [0.30, r * 1.04],     // widest belly — modest swell, ~1.21× drum radius
+    [0.48, r * 0.94],     // gentle shoulder
+    [0.64, r * 0.66],     // smooth neck
+    [0.80, r * 0.38],     // taper toward apex
+    [0.92, r * 0.15],     // rounded near-apex (non-tent)
     [1.00, 0.0],          // apex point
   ];
 
@@ -545,7 +562,7 @@ export function dome(r: number, ribbed = false): THREE.Group {
     // Texture: vertical dark stripes at lobe valleys make ribs visible regardless
     // of lighting (critical because hemisphere lighting washes out geometry shading).
     const LOBES = 24;
-    const AMP_MAX = 0.16;  // 16% scallop — slightly less than before to keep profile clean
+    const AMP_MAX = 0.12;  // 12% scallop — melon fluting that reads without ballooning the belly
     const RINGS = 36;
     const SEGS  = LOBES * 6; // 144 azimuthal segs — smooth geometry
 
@@ -553,26 +570,26 @@ export function dome(r: number, ribbed = false): THREE.Group {
     const stripeCanvas = document.createElement('canvas');
     stripeCanvas.width = 512; stripeCanvas.height = 256;
     const sg = stripeCanvas.getContext('2d')!;
-    // Base turquoise
-    sg.fillStyle = '#42c8c8';
+    // Base glaze
+    sg.fillStyle = baseHex;
     sg.fillRect(0, 0, 512, 256);
     // Dark valley stripes (N stripes across U=0..1)
     for (let i = 0; i < LOBES; i++) {
       const cx = (i + 0.5) / LOBES * 512;  // centre of each stripe
       const sw = 512 / LOBES * 0.26;         // stripe width: 26% of lobe pitch (slightly thinner for more lobes)
-      // Dark teal valley
-      sg.fillStyle = '#1a8080';
+      // Dark valley
+      sg.fillStyle = valleyHex;
       sg.fillRect(cx - sw / 2, 0, sw, 256);
       // Lighter highlight on ridge peak (halfway between valleys)
       const px2 = ((i + 1.0) / LOBES) * 512;
       const hw = sw * 0.45;
-      sg.fillStyle = '#5ae0e0';
+      sg.fillStyle = ridgeHex;
       sg.fillRect(px2 - hw / 2, 0, hw, 256);
     }
-    // Fade stripes out near top (apex) — top 20% of texture fades to solid
+    // Fade stripes out near top (apex) — top 20% of texture fades to solid base glaze
     const fadeGrad = sg.createLinearGradient(0, 256 * 0.75, 0, 256);
-    fadeGrad.addColorStop(0, 'rgba(66,200,200,0)');
-    fadeGrad.addColorStop(1, 'rgba(66,200,200,1)');
+    fadeGrad.addColorStop(0, `rgba(${glazeCol.r*255|0},${glazeCol.g*255|0},${glazeCol.b*255|0},0)`);
+    fadeGrad.addColorStop(1, baseHex);
     sg.fillStyle = fadeGrad;
     sg.fillRect(0, 256 * 0.75, 512, 256 * 0.25);
 
@@ -619,8 +636,8 @@ export function dome(r: number, ribbed = false): THREE.Group {
 
     const cap = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
       map: stripeTex,
-      emissive: new THREE.Color(C.turquoise),
-      emissiveIntensity: 0.10,
+      emissive: glazeCol,
+      emissiveIntensity: 0.12,
     }));
     cap.position.y = capBase;
     g.add(cap);
@@ -657,9 +674,9 @@ export function dome(r: number, ribbed = false): THREE.Group {
     }
 
     const cap = new THREE.Mesh(new THREE.LatheGeometry(capPts, 40), new THREE.MeshLambertMaterial({
-      color: C.turquoise,
-      emissive: new THREE.Color(C.turquoise),
-      emissiveIntensity: 0.16,
+      color: glaze,
+      emissive: glazeCol,
+      emissiveIntensity: 0.18,
     }));
     cap.position.y = capBase;
     g.add(cap);

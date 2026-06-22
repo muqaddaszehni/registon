@@ -1,4 +1,5 @@
 import { madrasah } from './madrasah';
+import { C } from '../palette';
 
 export function sherDor() {
   const g = madrasah({
@@ -7,8 +8,8 @@ export function sherDor() {
     wingH: 7,
     minarets: [{ offset: -10.8, h: 17 }, { offset: 10.8, h: 17 }],
     domes: [
-      { offset: -6.6, r: 2.2, ribbed: true, z: -4.5, yLift: 1.5 },
-      { offset:  6.6, r: 2.2, ribbed: true, z: -4.5, yLift: 1.5 },
+      { offset: -6.6, r: 2.2, ribbed: true, z: -4.5, yLift: 1.5, glaze: C.domeGlazeSD },
+      { offset:  6.6, r: 2.2, ribbed: true, z: -4.5, yLift: 1.5, glaze: C.domeGlazeSD },
     ],
     variant: 'sherdor',
     wingStyle: 'meander', // SD: cobalt/cream swastika-meander dominant

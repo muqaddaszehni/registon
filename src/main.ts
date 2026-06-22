@@ -126,4 +126,29 @@ addGardens(scene);
 onTick(addDoves(scene, grid, () => hero.worldPos));
 onTick(addMotes(scene));
 
+// ── DEBUG INSPECTION HOOK (only active with ?dbg in the URL) ──────────────
+// Lets an offline screenshot harness frame any block (facade/portal/minaret/
+// dome/tile field) from an arbitrary orbit angle at high zoom, overriding the
+// normal 90°-step orbit. Never runs in the shipped experience.
+if (location.search.includes('dbg')) {
+  type Pose = { tx?: number; ty?: number; tz?: number; az?: number; el?: number; zoom?: number };
+  let pose: Pose | null = null;
+  const w = window as unknown as Record<string, unknown>;
+  lodManager.onTierChange(2); // force full-resolution textures for fair close-up inspection
+  w.inspect = (cfg: Pose | null) => { pose = cfg; };
+  w.clearInspect = () => { pose = null; };
+  w.__dbg = { scene, camera, renderer };
+  // Reassert the inspect pose AFTER all other tickers (incl. orbit) each frame.
+  onTick(() => {
+    if (!pose) return;
+    const { tx = 0, ty = 6, tz = 0, az = Math.PI * 0.25, el = 0.5, zoom = 3 } = pose;
+    const d = 90;
+    const ce = Math.cos(el), se = Math.sin(el);
+    camera.position.set(tx + d * ce * Math.cos(az), ty + d * se, tz + d * ce * Math.sin(az));
+    camera.zoom = zoom;
+    camera.updateProjectionMatrix();
+    camera.lookAt(tx, ty, tz);
+  });
+}
+
 export { scene, camera, renderer };

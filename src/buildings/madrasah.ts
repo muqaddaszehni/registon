@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { pishtaq, minaret, dome, shadowed, patternedBoxMulti, recessedHujraFace } from './primitives';
+import { pishtaq, minaret, dome, shadowed, patternedBoxMulti, recessedHujraFace, DRUM_R_FACTOR } from './primitives';
 import { C } from '../palette';
 import { bannai, brickWall, type PortalVariant } from '../patterns/textures';
 
@@ -8,7 +8,7 @@ export interface MadrasahOpts {
   portal: { w: number; h: number; d: number };
   wingH: number;
   minarets?: { offset: number; h: number }[];
-  domes?: { offset: number; r: number; ribbed?: boolean; z?: number; yLift?: number }[];
+  domes?: { offset: number; r: number; ribbed?: boolean; z?: number; yLift?: number; glaze?: number }[];
   /**
    * Portal tympanum + texture variant.
    * 'ulughbeg'  → girih star constellation tympanum
@@ -240,7 +240,7 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
 
   // ── DOMES ───────────────────────────────────────────────────────
   for (const d of o.domes ?? []) {
-    const dd = dome(d.r, d.ribbed);
+    const dd = dome(d.r, d.ribbed, d.glaze);
     const domeZ = d.z ?? -o.portal.d * 0.1;
     const yLift = d.yLift ?? 0;
     const domeY = o.wingH + yLift;
@@ -252,8 +252,8 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
     // i.e. y=wingH in raised-group space) up to the dome group origin (y=yLift above that).
     // Radii match the dome's drum so the stack is seamless and continuous.
     if (yLift > 0) {
-      // drumR must match dome()'s own drum exactly: r * 0.74, bottom radius r * 0.74 * 1.04
-      const drumR = d.r * 0.74;
+      // drumR must match dome()'s own drum exactly: r * DRUM_R_FACTOR, bottom radius × 1.04
+      const drumR = d.r * DRUM_R_FACTOR;
       const drumRBottom = drumR * 1.04; // matches dome drum's bottom radius exactly
       // Support height slightly exceeds yLift so it overlaps into the drum by 0.08,
       // eliminating the coplanar joint (no z-fight, no visible gap).

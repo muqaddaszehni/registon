@@ -9,6 +9,9 @@ export const C = {
   cobalt: 0x1e5fa8, lapis: 0x16396e,
   // Greens
   turquoise: 0x42c8c8, teal: 0x2fa8a8,
+  // Dome glazes — brighter/more cyan than the wall turquoise so the domes read as
+  // glazed, glowing focal points (accuracy spec §2). SD leans greener; TK is purest/brightest.
+  domeGlazeSD: 0x37c2bc, domeGlazeTK: 0x46d0cc,
   // Accents
   cream: 0xfff6e3, gold: 0xd9b545,
   // Ambience

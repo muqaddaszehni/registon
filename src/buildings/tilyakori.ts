@@ -1,4 +1,5 @@
 import { madrasah } from './madrasah';
+import { C } from '../palette';
 
 export function tilyaKori() {
   const g = madrasah({
@@ -7,8 +8,8 @@ export function tilyaKori() {
     wingH: 6,
     variant: 'tilyakori',
     goldTrim: true,
-    // Grand smooth dome: r=3.8 for visible dominance (large bright-turquoise onion)
-    domes: [{ offset: -9, r: 3.8 }],
+    // Grand smooth dome: r=3.8 for visible dominance — the brightest, purest cyan glaze
+    domes: [{ offset: -9, r: 3.8, glaze: C.domeGlazeTK }],
     // Small corner turrets at facade ends (tilyakori-facade.jpg: round towers with small domes)
     turrets: [
       { offset: -14.1, h: 7, r: 0.9 },
