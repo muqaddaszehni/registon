@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
-const ELEV = 0.82;            // camera height factor (MV-ish, slightly above true iso)
+export const ELEV = 0.82;     // default camera height factor (MV-ish iso)
+export const FRONTAL_ELEV = 0.17; // low, head-on "frontal view" (secret mode)
 export const DIST = 60;
 export const VIEW_RADIUS = 24; // world units that must fit on screen
 
@@ -9,6 +10,7 @@ export interface CameraState {
   azimuth: number;   // radians; owned by Orbit
   zoom: number;      // 1.0 = full view, 0.18 = facade close-up
   target: THREE.Vector3; // look-at point; (0,3,0) at rest, pan changes it
+  elev?: number;     // camera height factor; eased between ELEV (iso) and FRONTAL_ELEV
 }
 
 export function makeCamera(): THREE.OrthographicCamera {
@@ -31,9 +33,10 @@ export function placeCamera(cam: THREE.OrthographicCamera, azimuth: number) {
 /** Full composed placement from CameraState */
 export function placeCameraFromState(cam: THREE.OrthographicCamera, state: CameraState) {
   const { azimuth, zoom, target } = state;
+  const elev = state.elev ?? ELEV;
   cam.position.set(
     target.x + Math.sin(azimuth) * DIST,
-    target.y + DIST * ELEV,
+    target.y + DIST * elev,
     target.z + Math.cos(azimuth) * DIST,
   );
   cam.lookAt(target.x, target.y, target.z);

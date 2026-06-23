@@ -99,8 +99,27 @@ zoomCtrl.onTierChange(tier => {
   lodManager.onTierChange(tier);
 });
 
+// Secret "frontal view" button (slot 4) — hidden until the user completes a full
+// 360° rotation, then it reveals and toggles a low, head-on frontal framing.
+const frontalBtn = cornerButton('◈', 'Frontal view', 4, () => {
+  const on = !orbit.isFrontal;
+  orbit.setFrontal(on);
+  frontalBtn.style.opacity = on ? '1' : '0.7';
+  if (on) { zoomCtrl.setTarget(1.0); orbit.state.target.set(0, 3, 0); }
+});
+frontalBtn.style.display = 'none';
+frontalBtn.style.opacity = '0.7';
+
 // Rotation button (slot 0)
-cornerButton('⟳', 'Rotate view', 0, () => orbit.rotate());
+cornerButton('⟳', 'Rotate view', 0, () => {
+  orbit.rotate();
+  if (orbit.turns >= 4 && frontalBtn.style.display === 'none') {
+    frontalBtn.style.display = '';          // reveal the secret after one full turn
+    frontalBtn.style.transition = 'opacity .6s ease';
+    frontalBtn.style.opacity = '0';
+    requestAnimationFrame(() => { frontalBtn.style.opacity = '0.85'; });
+  }
+});
 addAudioToggle();
 
 // Zoom-in button (slot 2)

@@ -122,7 +122,7 @@ export function archScreenGeometry(
  */
 export function pishtaq(
   w: number, h: number, d: number,
-  opts: { variant?: PortalVariant; wingH?: number } = {},
+  opts: { variant?: PortalVariant; wingH?: number; iwanBack?: THREE.Texture } = {},
 ): THREE.Group {
   const g = new THREE.Group();
   const variant: PortalVariant = opts.variant ?? 'ulughbeg';
@@ -408,7 +408,7 @@ export function pishtaq(
   // DoubleSide so the wall also closes the iwan from BEHIND. The pishtaq stands
   // open-backed over the hollow courtyard; without a back face you see straight
   // through the arch from the rear and the muqarnas cells read as floating steps.
-  const iwanTex = iwanTexture(variant);
+  const iwanTex = opts.iwanBack ?? iwanTexture(variant);
   const backWall = new THREE.Mesh(
     new THREE.PlaneGeometry(aw + 0.4, apex + 0.4),
     new THREE.MeshLambertMaterial({
@@ -964,7 +964,7 @@ export function recessedHujraFace(
   //   z = BACK_Z     : dark niche back wall (just proud of box, hides its face)
   //   z = SCREEN_FRONT − SCREEN_DEPTH .. SCREEN_FRONT : proud arcade screen slab
   const BACK_Z       = 0.06;            // dark back wall, clearly proud of box face (no z-fight)
-  const RECESS_DEPTH = 0.34;            // visible inward depth (back wall → screen back)
+  const RECESS_DEPTH = 0.52;            // deeper niches → arcades read more 3D (was 0.34)
   const SCREEN_DEPTH = 0.22;            // arcade screen slab thickness
   const SCREEN_FRONT = BACK_Z + RECESS_DEPTH + SCREEN_DEPTH;   // ≈0.62 proud front
   const PROUD        = SCREEN_FRONT;    // top of relief (used by trims/frames)

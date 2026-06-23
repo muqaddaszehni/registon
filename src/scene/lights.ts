@@ -3,7 +3,7 @@ import * as THREE from 'three';
 export function addSunsetLights(scene: THREE.Scene) {
   // ── Key Sun: bright, near-neutral DAYLIGHT (matching the Wikipedia photos —
   //    clear day, warm-white sun, fairly high so shadows are short and soft).
-  const sun = new THREE.DirectionalLight(0xffeec8, 3.4); // warm-white daylight (keeps buff stone warm)
+  const sun = new THREE.DirectionalLight(0xffe7b6, 3.4); // a touch warmer daylight (golden-leaning, still clear-day)
   sun.position.set(-22, 40, 18); // high midday-ish sun → short soft shadows
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);

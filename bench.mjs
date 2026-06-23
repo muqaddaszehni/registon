@@ -14,6 +14,7 @@ const SHOTS = [
   { n: 'sidewall',  tx: 13,   ty: 6,  tz: -4,   az: 2.35,        el: 0.20, zoom: 1.0 },  // ↔ sherdor_ulugbeg.jpg
   { n: 'dome',      tx: 17.5, ty: 12, tz: 6.6,  az: 0.55,        el: 0.42, zoom: 3.0 },
   { n: 'minaret',   tx: 13,   ty: 13, tz: 10.8, az: 0.7,         el: 0.20, zoom: 2.2 },
+  { n: 'tkiwan',    tx: 0,    ty: 6.5,tz: -12.5,az: Math.PI / 2, el: 0.06, zoom: 2.2 }, // straight into TK iwan → Zehni back wall
 ];
 
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu'] });
