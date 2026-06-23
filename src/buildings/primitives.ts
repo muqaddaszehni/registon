@@ -993,9 +993,10 @@ export function recessedHujraFace(
   // every opening reads as a true dark recess, not a flat painted arch.
   const screenSideMat  = _archSoffitMat;
 
-  // Niche back wall — near-black to maximise shadow contrast through the arch holes.
+  // Niche back wall — a DARK WARM BROWN (deep brick shadow), not pure black, so
+  // the recesses read as shadowed arched niches like the photos, not flat voids.
   // DoubleSide so it renders regardless of which way the Group is rotated (courtyard vs plaza).
-  const backWallColor = 0x140d07;  // near-black — deep iwan shadow
+  const backWallColor = 0x2a2016;  // dark warm brown — deep recess shadow
   const backWallMat   = new THREE.MeshLambertMaterial({
     color: backWallColor,
     side: THREE.DoubleSide,
