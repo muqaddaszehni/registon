@@ -19,11 +19,16 @@ const music = await page.evaluate(async () => {
   if (!ctx || !mg) return { err: 'no audio graph' };
   const an = ctx.createAnalyser(); an.fftSize = 2048;
   mg.connect(an);
-  await new Promise(r => setTimeout(r, 900));
-  const buf = new Float32Array(an.fftSize);
-  an.getFloatTimeDomainData(buf);
-  let sum = 0; for (const v of buf) sum += v * v;
-  return { state: ctx.state, gain: +mg.gain.value.toFixed(4), rms: +Math.sqrt(sum / buf.length).toFixed(5) };
+  // Sparse plucks → sample peak RMS over ~5 s rather than one window.
+  let peak = 0;
+  for (let s = 0; s < 25; s++) {
+    await new Promise(r => setTimeout(r, 200));
+    const buf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(buf);
+    let sum = 0; for (const v of buf) sum += v * v;
+    peak = Math.max(peak, Math.sqrt(sum / buf.length));
+  }
+  return { state: ctx.state, gain: +mg.gain.value.toFixed(4), peakRms: +peak.toFixed(5) };
 });
 console.log('MUSIC:', JSON.stringify(music));
 

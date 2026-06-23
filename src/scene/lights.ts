@@ -5,8 +5,8 @@ export function addSunsetLights(scene: THREE.Scene) {
   //    Strong key vs. soft cool fill creates the golden-hour light/shadow SPLIT:
   //    lit faces glow amber, shadowed faces fall cool-violet (matching the sky).
   //    Position: west-southwest, low elevation so shadows rake long across the plaza.
-  const sun = new THREE.DirectionalLight(0xffc070, 3.6);
-  sun.position.set(-34, 13, 14); // lower elevation → longer raking shadows
+  const sun = new THREE.DirectionalLight(0xffd49a, 3.4);
+  sun.position.set(-28, 28, 14); // ~3pm afternoon: higher elevation (~42°), shorter shadows
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); // crisper, softer-filtered contact shadows
   const s = 38;

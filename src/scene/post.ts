@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 
 /**
  * Cinematic golden-hour grade shader.
@@ -92,15 +93,20 @@ export function makeComposer(
 
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(innerWidth, innerHeight),
-    0.16,   // strength — gentle glow on bright turquoise/gold
+    0.12,   // strength — trimmed so bright tile highlights on dark blue don't bloom-flicker
     0.5,    // radius — tight, prevents bleed
-    0.88,   // threshold — only bright emissive blooms; matte stone stays clean
+    0.90,   // threshold — raised so only the brightest emissive (domes/finials) blooms
   );
   composer.addPass(bloom);
 
   composer.addPass(new ShaderPass(GoldenGradeShader));
 
   composer.addPass(new OutputPass());
+
+  // SMAA on the final tonemapped image. MSAA only smooths geometry edges; SMAA
+  // also smooths high-contrast colour edges *inside* textures (the cobalt/turquoise
+  // girih lattice), which were the residual shimmer around the dark-blue tilework.
+  composer.addPass(new SMAAPass());
 
   return composer;
 }

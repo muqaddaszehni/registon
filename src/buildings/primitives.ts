@@ -776,9 +776,9 @@ export function minaret(h: number): THREE.Group {
     g.add(ring);
   }
 
-  // ── LANTERN ROTUNDA CROWN (no sphere) ─────────────────────────────
-  // An arcaded lantern drum capped by a low pointed cone + slim gold spike.
-  // Replaces the former bulbous sand sphere, which read as a mushroom/golf-ball.
+  // ── FLAT LANTERN CROWN (flat top — no dome/cone/sphere) ───────────
+  // An arcaded lantern drum closed by a flat cornice disc. The minaret
+  // terminates flat per the brief (no bulb, no cone, no finial spike).
   const [lastYOff, , lastRH] = ringData[2];
   const crownBase = corniceBase + lastYOff * h + lastRH + h * 0.004;
 
@@ -796,39 +796,16 @@ export function minaret(h: number): THREE.Group {
   lantern.castShadow = true;
   g.add(lantern);
 
-  // Cream cornice lid over the lantern.
-  const lidR = lanternR * 1.14;
-  const lidH = h * 0.013;
-  const lid = new THREE.Mesh(
-    new THREE.CylinderGeometry(lidR, lanternR * 1.04, lidH, 16),
+  // Flat cornice cap disc — a short cylinder with a flat top closing the minaret.
+  const capR = lanternR * 1.12;
+  const capH = h * 0.022;
+  const flatCap = new THREE.Mesh(
+    new THREE.CylinderGeometry(capR, lanternR * 1.04, capH, 16),
     mat(C.cream),
   );
-  lid.position.y = crownBase + lanternH + lidH / 2;
-  g.add(lid);
-
-  // Low pointed conical cap — glazed turquoise, distinctly non-spherical.
-  const coneBaseY = crownBase + lanternH + lidH;
-  const coneH = h * 0.085;
-  const coneCap = new THREE.Mesh(
-    new THREE.ConeGeometry(lidR * 0.95, coneH, 16),
-    new THREE.MeshLambertMaterial({
-      color: C.turquoise,
-      emissive: new THREE.Color(C.turquoise),
-      emissiveIntensity: 0.12,
-    }),
-  );
-  coneCap.position.y = coneBaseY + coneH / 2;
-  coneCap.castShadow = true;
-  g.add(coneCap);
-
-  // Slim gold finial spike (thin cone — no sphere).
-  const spikeH = h * 0.05;
-  const spike = new THREE.Mesh(
-    new THREE.ConeGeometry(rTop * 0.10, spikeH, 8),
-    mat(C.gold),
-  );
-  spike.position.y = coneBaseY + coneH + spikeH / 2 - h * 0.004;
-  g.add(spike);
+  flatCap.position.y = crownBase + lanternH + capH / 2;
+  flatCap.castShadow = true;
+  g.add(flatCap);
 
   return g;
 }
