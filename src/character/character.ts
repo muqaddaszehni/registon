@@ -124,6 +124,9 @@ export class Character {
   /** True while walking a path (used to drive on-demand shadow-map updates). */
   get moving(): boolean { return this.waypoints.length > 0; }
 
+  /** Halt the current walk in place (e.g. when a double-tap zoom interrupts). */
+  stop(): void { this.waypoints = []; }
+
   get tile(): Pt { return worldToTile(this.grid.cols, this.grid.rows, this.pos); }
 
   walkTo(target: Pt): boolean {

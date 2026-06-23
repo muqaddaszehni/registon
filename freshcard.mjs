@@ -1,0 +1,11 @@
+import { chromium, devices } from 'playwright';
+const PORT = process.env.PORT || 5173;
+const b = await chromium.launch();
+const c = await b.newContext({ ...devices['iPhone 13'] });
+const p = await c.newPage();
+await p.goto(`http://localhost:${PORT}/`, { waitUntil:'networkidle', timeout:15000 });
+await p.waitForTimeout(4000);
+await p.evaluate(()=>window.__cards.show(7));
+await p.waitForTimeout(1500);
+await p.screenshot({ path:'/tmp/freshcard.png' });
+await b.close(); console.log('done');

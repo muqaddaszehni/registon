@@ -19,10 +19,18 @@
   <!-- TJ body: Yeseva One (elegant Cyrillic, covers Tajik ғ ӯ ҳ ҷ). -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Nastaliq+Urdu:wght@400;500;700&family=Yeseva+One&family=Reem+Kufi:wght@500;600;700&display=swap" />
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #f5c9a0; }
-    #app { position: fixed; inset: 0; }
+    /* Mobile: the app owns ALL gestures. touch-action:none stops iOS/Android from
+       hijacking pan/zoom/double-tap; overscroll-behavior:none kills rubber-banding. */
+    html, body {
+      margin: 0; height: 100%; overflow: hidden; background: #f5c9a0;
+      overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #app, #app canvas { position: fixed; inset: 0; touch-action: none; }
     #ui { position: fixed; inset: 0; pointer-events: none; font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif; }
     #ui > * { pointer-events: auto; }
+    /* Buttons/cards: allow taps without the 300ms delay, no double-tap zoom. */
+    #ui button, #ui .langtoggle { touch-action: manipulation; }
   </style>
 </head>
 <body>

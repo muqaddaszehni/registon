@@ -240,7 +240,17 @@ export function addAudioToggle() {
   // browsers allow.
   let on = true;
   let started = false;
-  const start = () => { if (on && !started) { started = true; startEngine(); } };
+  const EVENTS = ['pointerdown', 'touchstart', 'keydown'] as const;
+  // iOS may not fully unlock audio on the first resume(), so keep retrying on
+  // each gesture until the context is actually running, then detach.
+  const start = () => {
+    if (!on) return;
+    if (!started) { started = true; startEngine(); }
+    else if (ctx && ctx.state === 'suspended') ctx.resume();
+    if (ctx && ctx.state === 'running') {
+      for (const ev of EVENTS) window.removeEventListener(ev, start);
+    }
+  };
 
   const btn = cornerButton('♪', 'Music', 1, () => {
     on = !on;
@@ -250,10 +260,7 @@ export function addAudioToggle() {
   });
   btn.style.opacity = '1'; // on by default
 
-  // Arm autostart on first gesture (each fires once; resume is idempotent).
-  for (const ev of ['pointerdown', 'touchstart', 'keydown'] as const) {
-    window.addEventListener(ev, start, { once: true });
-  }
+  for (const ev of EVENTS) window.addEventListener(ev, start);
 }
 
 // (window.__audioCtx / window.__masterGain set in buildGraph for E2E RMS tests)

@@ -152,6 +152,10 @@ onTick(() => {
   if (shadowHold > 0) { renderer.shadowMap.needsUpdate = true; shadowHold--; }
 });
 
+// Expose interactive state for the E2E/mobile harness (harmless in production,
+// matching __cards / __audioCtx).
+(window as unknown as Record<string, unknown>).__game = { hero, zoom: zoomCtrl, orbit, pan: panCtrl };
+
 // ── DEBUG INSPECTION HOOK (only active with ?dbg in the URL) ──────────────
 // Lets an offline screenshot harness frame any block (facade/portal/minaret/
 // dome/tile field) from an arbitrary orbit angle at high zoom, overriding the

@@ -87,18 +87,36 @@ const css = `
 }
 
 .card .close {
-  position: absolute; top: 10px; right: 12px;
-  width: 30px; height: 30px; line-height: 28px; text-align: center;
-  border: 1px solid rgba(184,137,61,.45); background: rgba(255,255,255,.4);
-  border-radius: 50%; font-size: 19px; cursor: pointer; color: #6b5526;
-  transition: background .15s, color .15s, border-color .15s;
+  position: absolute; top: 8px; right: 8px;
+  width: 40px; height: 40px; line-height: 38px; text-align: center;
+  border: 1px solid rgba(184,137,61,.45); background: rgba(255,255,255,.5);
+  border-radius: 50%; font-size: 22px; cursor: pointer; color: #6b5526;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: background .15s, color .15s, border-color .15s, transform .1s;
 }
 .card .close:hover { background: #b8893d; color: #fffaf0; border-color: #b8893d; }
+.card .close:active { transform: scale(.9); background: #b8893d; color: #fffaf0; }
 .card .close:focus-visible { outline: 2px solid #123a66; outline-offset: 2px; }
 
 @media (orientation: portrait) {
-  #ui .card { bottom: 0; border-radius: 16px 16px 0 0; width: 100vw; }
-  .card .frame { margin: 12px 14px 16px; }
+  /* Bottom sheet: full width, capped height with a scrollable body so long
+     Tajik text is never clipped. svh tracks the *visible* viewport (mobile
+     toolbars), and the frame's bottom padding clears the bottom-left language
+     toggle so the last line never hides behind it. */
+  #ui .card {
+    bottom: 0; border-radius: 16px 16px 0 0; width: 100vw;
+    max-height: 86vh; max-height: 86svh;
+  }
+  .card .frame {
+    margin: 12px 14px 12px;
+    max-height: calc(86svh - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+  .card .close { width: 44px; height: 44px; line-height: 42px; top: 6px; right: 6px; }
+  .card h3 { margin-right: 48px; }
+  /* The full-width card overlaps the right-edge corner buttons → hide them while
+     reading (the card's own close handles dismissal; langtoggle stays usable). */
+  #ui.card-open > button:not(.langtoggle) { opacity: 0; pointer-events: none; transition: opacity .2s ease; }
 }
 @media (prefers-reduced-motion: reduce) {
   #ui .card { transition: opacity .01s; }
@@ -207,7 +225,14 @@ export class Cards {
     this.el.querySelector('p')!.textContent = c.body;
     this.el.querySelector('.close')!.addEventListener('click', () => this.hide());
     this.el.classList.add('open');
+    // On mobile the bottom-sheet card overlaps the right-edge corner buttons,
+    // so hide them while reading (they'd otherwise block the close button).
+    document.getElementById('ui')!.classList.add('card-open');
   }
 
-  hide() { this.el.classList.remove('open'); this.currentId = null; }
+  hide() {
+    this.el.classList.remove('open');
+    this.currentId = null;
+    document.getElementById('ui')!.classList.remove('card-open');
+  }
 }

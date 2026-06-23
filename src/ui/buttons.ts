@@ -13,6 +13,13 @@ export function cornerButton(label: string, title: string, slot: number, onClick
     transition:filter .15s ease, transform .12s ease;`;
   b.addEventListener('mouseenter', () => { b.style.filter = 'brightness(1.14)'; });
   b.addEventListener('mouseleave', () => { b.style.filter = ''; });
+  // Touch/press feedback (hover doesn't exist on touch): scale + brighten on press.
+  const press = () => { b.style.transform = 'scale(.88)'; b.style.filter = 'brightness(1.2)'; };
+  const release = () => { b.style.transform = ''; b.style.filter = ''; };
+  b.addEventListener('pointerdown', press);
+  b.addEventListener('pointerup', release);
+  b.addEventListener('pointercancel', release);
+  b.addEventListener('pointerleave', release);
   b.addEventListener('focus', () => { b.style.outline = '2px solid #3fc1c9'; b.style.outlineOffset = '2px'; });
   b.addEventListener('blur', () => { b.style.outline = ''; });
   b.addEventListener('click', onClick);

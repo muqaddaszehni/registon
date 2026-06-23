@@ -77,7 +77,9 @@ export function bindTapToMove(
     lastTapY = e.clientY;
 
     if (isDoubleTap) {
-      // Quick-zoom: 0.4 centered on click point, or back to 1.0
+      // Double-tap = quick-zoom. Cancel the step the first tap started so the
+      // hero doesn't wander off while you zoom (keeps the single tap snappy).
+      ch.stop();
       if (zoom.target < 0.95) {
         zoom.setTarget(1.0);
         state.target.set(0, 3, 0);
@@ -95,7 +97,7 @@ export function bindTapToMove(
       return;
     }
 
-    // Regular tap → walk
+    // Single tap → walk immediately (snappy).
     ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObject(ground, false)[0];
@@ -115,12 +117,15 @@ export function bindTouchGestures(
   let prevTouches: Map<number, {x: number; y: number}> = new Map();
 
   el.addEventListener('touchstart', (e) => {
-    e.preventDefault();
+    // Only block default for multi-touch (pinch/pan); single-finger taps flow to
+    // the pointer handlers (tap-to-move) cleanly. touch-action:none already stops
+    // the browser from scrolling/zooming the page.
+    if (e.touches.length >= 2) e.preventDefault();
     prevTouches = getTouchMap(e.touches);
   }, { passive: false });
 
   el.addEventListener('touchmove', (e) => {
-    e.preventDefault();
+    if (e.touches.length >= 2) e.preventDefault();
     const curr = getTouchMap(e.touches);
     const keys = [...curr.keys()];
 
