@@ -1,6 +1,5 @@
 import { madrasah } from './madrasah';
 import { C } from '../palette';
-import { zehniPanelTexture } from '../patterns/zehni';
 
 export function tilyaKori() {
   const g = madrasah({
@@ -9,7 +8,6 @@ export function tilyaKori() {
     wingH: 6,
     variant: 'tilyakori',
     goldTrim: true,
-    backPanel: zehniPanelTexture(), // Zehni tile mosaic on the farthest courtyard wall
     // Grand ribbed (melon-fluted) dome — all Registan domes are fluted turquoise.
     domes: [{ offset: -9, r: 3.8, ribbed: true, glaze: C.domeGlazeTK }],
     // Small corner turrets at facade ends (tilyakori-facade.jpg: round towers with small domes)

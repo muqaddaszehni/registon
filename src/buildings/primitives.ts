@@ -122,7 +122,7 @@ export function archScreenGeometry(
  */
 export function pishtaq(
   w: number, h: number, d: number,
-  opts: { variant?: PortalVariant; wingH?: number; iwanBack?: THREE.Texture } = {},
+  opts: { variant?: PortalVariant; wingH?: number } = {},
 ): THREE.Group {
   const g = new THREE.Group();
   const variant: PortalVariant = opts.variant ?? 'ulughbeg';
@@ -408,7 +408,7 @@ export function pishtaq(
   // DoubleSide so the wall also closes the iwan from BEHIND. The pishtaq stands
   // open-backed over the hollow courtyard; without a back face you see straight
   // through the arch from the rear and the muqarnas cells read as floating steps.
-  const iwanTex = opts.iwanBack ?? iwanTexture(variant);
+  const iwanTex = iwanTexture(variant);
   const backWall = new THREE.Mesh(
     new THREE.PlaneGeometry(aw + 0.4, apex + 0.4),
     new THREE.MeshLambertMaterial({

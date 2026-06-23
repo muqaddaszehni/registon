@@ -26,10 +26,6 @@ export interface MadrasahOpts {
   wingThickness?: number;
   /** Gold trim on courtyard arcade bands (Tilya-Kori). Default false */
   goldTrim?: boolean;
-  /** Optional override texture for the iwan BACK WALL — the farthest wall you see
-   *  looking into the central portal (Tilya-Kori's Zehni tile panel). The shallow
-   *  enclosed courtyard behind it is occluded, so this is where it's actually visible. */
-  backPanel?: THREE.Texture;
 }
 
 export function madrasah(o: MadrasahOpts): THREE.Group {
@@ -153,7 +149,6 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   const portal = pishtaq(o.portal.w, o.portal.h, o.portal.d, {
     variant: o.variant,
     wingH: o.wingH,   // so pishtaq can close its sides down to the wing roof level
-    iwanBack: o.backPanel, // optional override of the iwan back wall (Tilya-Kori Zehni panel)
   });
   raised.add(portal);
 
