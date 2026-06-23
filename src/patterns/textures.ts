@@ -791,7 +791,7 @@ export function pylonFace(bg: number, line: number, motif: number, border: numbe
 }
 
 // Internal colour constants used by archPanel and portal helpers (avoids importing palette)
-const C_SAND   = 0xecdfc4;
+const C_SAND   = 0xe6d4ac;
 const C_COBALT = 0x2a6cb8;
 const C_CREAM  = 0xfff6e3;
 // Additional portal palette constants (our C palette authoritative)
@@ -1036,7 +1036,7 @@ export function girih(bg: number, star: number, accent: number, cells = 4): THRE
 }
 
 // ─── Palette constants (our C, kept as hex numbers) ────────────────────────
-const REF_SAND        = 0xecdfc4;
+const REF_SAND        = 0xe6d4ac;
 const REF_COBALT      = 0x2a6cb8;
 const REF_COBALT_DARK = 0x214a82;
 const REF_TURQUOISE   = 0x42c8c8;

@@ -1,6 +1,6 @@
 export const C = {
-  // Stone
-  sand: 0xecdfc4, sandLight: 0xf5ecda, sandDark: 0xd4c4a0,
+  // Stone — warm tan buff (the dominant brick colour in the Wikipedia photos)
+  sand: 0xe6d4ac, sandLight: 0xf1e6cc, sandDark: 0xccba90,
   // Marble (pale grey-cream for plinths and steps — warm not stark white)
   marble: 0xe8e3d6,
   // Plaza
