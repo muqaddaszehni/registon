@@ -25,12 +25,18 @@ function makeGlowTexture(): THREE.CanvasTexture {
   return t;
 }
 
-/** Glowing star tiles; returns a tick function that pulses them. */
-export function addHotspotMarkers(scene: THREE.Scene, grid: Grid): (dt: number) => void {
+/** Glowing star tiles; returns a tick function that pulses them.
+ *  `heroTile` lets the Registan "tap here" glow stop pulsing (and fade out)
+ *  once the player has actually walked onto that tile. */
+export function addHotspotMarkers(
+  scene: THREE.Scene, grid: Grid, heroTile?: () => Pt,
+): (dt: number) => void {
   const mats: THREE.MeshLambertMaterial[] = [];
   // Soft "tap here" halo on THE REGISTAN hotspot (id 7) — a turquoise additive
   // glow pool that breathes, signalling the scene is interactive.
   let glowMat: THREE.MeshBasicMaterial | null = null;
+  let glowTile: Pt | null = null;
+  let glowVisited = false;
   const GLOW_TURQUOISE = 0x37d2e0;
   for (const [id, tile] of grid.hotspots) {
     const w = tileToWorld(grid.cols, grid.rows, tile);
@@ -45,6 +51,7 @@ export function addHotspotMarkers(scene: THREE.Scene, grid: Grid): (dt: number) 
     mats.push(m);
 
     if (id === 7) {
+      glowTile = tile;
       // Soft radial-gradient glow pool (bright centre → transparent edge).
       const glowTex = makeGlowTexture();
       glowMat = new THREE.MeshBasicMaterial({
@@ -61,11 +68,22 @@ export function addHotspotMarkers(scene: THREE.Scene, grid: Grid): (dt: number) 
   let t = 0;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   return (dt: number) => {
-    if (reduced) { if (glowMat) glowMat.opacity = 0.4; return; }
     t += dt;
+
+    // Once the player walks onto the Registan tile, the glow has done its job —
+    // stop pulsating and fade it out.
+    if (!glowVisited && glowTile && heroTile) {
+      const ht = heroTile();
+      if (ht.x === glowTile.x && ht.y === glowTile.y) glowVisited = true;
+    }
+    if (glowMat) {
+      if (glowVisited) glowMat.opacity = Math.max(0, glowMat.opacity - dt * 0.9);
+      else if (reduced) glowMat.opacity = 0.4;                                   // static (no pulse)
+      else glowMat.opacity = 0.22 + 0.20 * (1 + Math.sin(t * 2.4));              // soft breathing
+    }
+
+    if (reduced) return;
     const k = 0.35 + 0.3 * (0.5 + Math.sin(t * 2.5) / 2);
     for (const m of mats) m.emissiveIntensity = k;
-    // First-tile halo: slow soft breathing (~2.6 s), opacity 0.22–0.62.
-    if (glowMat) glowMat.opacity = 0.22 + 0.20 * (1 + Math.sin(t * 2.4));
   };
 }

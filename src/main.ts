@@ -126,7 +126,7 @@ renderer.domElement.addEventListener('wheel', (e) => {
   zoomCtrl.onWheel(e, camera, orbit.state);
 }, { passive: false });
 
-onTick(addHotspotMarkers(scene, grid));
+onTick(addHotspotMarkers(scene, grid, () => hero.tile));
 const cards = new Cards();
 hero.onArrive = () => {
   const id = hotspotForTile(grid, hero.tile);

@@ -2146,58 +2146,12 @@ export function portalTexture(variant: PortalVariant, wM: number, hM: number): T
  * Back wall of the recessed iwan: tympanum panel + star dado + double door.
  * Priority=true → 2x re-rasterization on zoom.
  */
-/** One square-Kufic (Latin) letter from thick rectilinear bars. Z/E/H/N/I are
- *  all rectilinear, so they read cleanly as geometric tile-calligraphy. */
-function drawKuficLetter(
-  g: CanvasRenderingContext2D, ch: string,
-  x: number, y: number, w: number, h: number, t: number, color: string,
-): void {
-  g.fillStyle = color; g.strokeStyle = color; g.lineCap = 'butt'; g.lineJoin = 'miter';
-  const r = (bx: number, by: number, bw: number, bh: number) => g.fillRect(bx, by, bw, bh);
-  const diag = (x1: number, y1: number, x2: number, y2: number) => {
-    g.lineWidth = t; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
-  };
-  const xe = x + w, ye = y + h, mid = y + (h - t) / 2;
-  if (ch === 'Z')      { r(x, y, w, t); r(x, ye - t, w, t); diag(xe - t / 2, y + t, x + t / 2, ye - t); }
-  else if (ch === 'E') { r(x, y, t, h); r(x, y, w, t); r(x, mid, w * 0.8, t); r(x, ye - t, w, t); }
-  else if (ch === 'H') { r(x, y, t, h); r(xe - t, y, t, h); r(x, mid, w, t); }
-  else if (ch === 'N') { r(x, y, t, h); r(xe - t, y, t, h); diag(x + t / 2, y, xe - t / 2, ye); }
-  else if (ch === 'I') { r(x + (w - t) / 2, y, t, h); r(x + w * 0.18, y, w * 0.64, t); r(x + w * 0.18, ye - t, w * 0.64, t); }
-}
-
-/** Render the word "ZEHNI" in square-Kufic across a panel: a turquoise glaze
- *  shadow under cream letters, on the dark-cobalt iwan field. */
-function drawKuficZehni(g: CanvasRenderingContext2D, rx: number, ry: number, rw: number, rh: number): void {
-  const letters = ['Z', 'E', 'H', 'N', 'I'];
-  const n = letters.length;
-  const gap = rw * 0.035;
-  const cellW = (rw - gap * (n - 1)) / n;
-  const lh = rh * 0.62;
-  const ly = ry + (rh - lh) / 2;
-  const t = Math.min(cellW, lh) * 0.22;
-  for (let i = 0; i < n; i++) {
-    const lx = rx + i * (cellW + gap);
-    drawKuficLetter(g, letters[i], lx + t * 0.18, ly + t * 0.18, cellW, lh, t, px(C_TURQUOISE)); // glaze shadow
-    drawKuficLetter(g, letters[i], lx, ly, cellW, lh, t, px(C_WHITE));                            // letter face
-  }
-}
-
 export function iwanTexture(variant: PortalVariant): THREE.CanvasTexture {
   const W = 768, H = 1024;
 
   function draw(ctx: CanvasRenderingContext2D, w: number, h: number) {
     ctx.fillStyle = px(C_COBALT_DARK); ctx.fillRect(0, 0, w, h);
-    // Sher-Dor back wall carries the Kufic wordmark "ZEHNI"; others their tympanum.
-    // The wall plane is DoubleSide and read from the building's REAR, which mirrors
-    // the texture — so pre-mirror ZEHNI horizontally to read correctly from the back.
-    if (variant === 'sherdor') {
-      ctx.save();
-      ctx.translate(w, 0); ctx.scale(-1, 1);
-      drawKuficZehni(ctx, w * 0.06, h * 0.05, w * 0.88, h * 0.42);
-      ctx.restore();
-    } else {
-      TYMPANUM_BY_VARIANT[variant](ctx, w * 0.06, h * 0.05, w * 0.88, h * 0.42);
-    }
+    TYMPANUM_BY_VARIANT[variant](ctx, w * 0.06, h * 0.05, w * 0.88, h * 0.42);
     ctx.strokeStyle = px(C_GOLD); ctx.lineWidth = 8;
     ctx.strokeRect(w * 0.06, h * 0.05, w * 0.88, h * 0.42);
     // star dado
