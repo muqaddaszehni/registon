@@ -17,7 +17,8 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 2 });
 page.on('pageerror', e => console.log('EXC:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.log('CONSOLE ERR:', m.text()); });
-await page.goto('http://localhost:5173/?dbg', { waitUntil: 'networkidle', timeout: 15000 });
+const PORT = process.env.PORT || 5173;
+await page.goto(`http://localhost:${PORT}/?dbg`, { waitUntil: 'networkidle', timeout: 15000 });
 await page.waitForTimeout(4500);
 for (const s of SHOTS) {
   await page.evaluate((p) => window.inspect(p), s);

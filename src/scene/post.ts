@@ -77,7 +77,16 @@ export function makeComposer(
   scene: THREE.Scene,
   camera: THREE.Camera,
 ): EffectComposer {
-  const composer = new EffectComposer(renderer);
+  // Multisampled (4× MSAA) HDR render target. EffectComposer otherwise renders
+  // to a plain target that BYPASSES the renderer's antialias:true — so geometry
+  // edges and thin tile-grid lines aliased and "crawled"/glimmered during camera
+  // rotation. HalfFloat keeps HDR headroom for clean bloom.
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const renderTarget = new THREE.WebGLRenderTarget(size.x, size.y, {
+    type: THREE.HalfFloatType,
+    samples: 4,
+  });
+  const composer = new EffectComposer(renderer, renderTarget);
 
   composer.addPass(new RenderPass(scene, camera));
 

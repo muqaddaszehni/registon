@@ -3,6 +3,7 @@ import { C } from '../palette';
 import { mat } from '../buildings/primitives';
 import { Grid, isWalkable } from '../world/grid';
 import { tileToWorld, V2 } from '../world/coords';
+import { playBirdScatter } from '../audio';
 
 // ---------------------------------------------------------------------------
 // Ground doves only — the wheeling flock was removed at the user's request.
@@ -43,11 +44,13 @@ export function addDoves(scene: THREE.Scene, grid: Grid, heroPos: () => V2): (dt
   return (dt: number) => {
     // Ground doves
     const hp = heroPos();
+    let scattered = false;
     for (const d of doves) {
       const dist = Math.hypot(d.pos.x - hp.x, d.pos.z - hp.z);
       if (dist < 1.6 && d.fly <= 0) {
         d.fly = reduced ? 0 : 1.4;
         d.target = spot(d.phase + Math.floor(d.pos.x * 7));
+        scattered = true;
       }
       const speed = d.fly > 0 ? 5 : 0.5;
       const dx = d.target.x - d.pos.x, dz = d.target.z - d.pos.z;
@@ -63,5 +66,6 @@ export function addDoves(scene: THREE.Scene, grid: Grid, heroPos: () => V2): (dt
       const h = d.fly > 0 ? Math.sin((1.4 - d.fly) / 1.4 * Math.PI) * 2.2 : 0;
       d.g.position.set(d.pos.x, 0.1 + h, d.pos.z);
     }
+    if (scattered) playBirdScatter();
   };
 }

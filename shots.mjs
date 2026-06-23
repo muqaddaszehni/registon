@@ -9,7 +9,8 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, dev
 page.on('console', m => { if (m.type() === 'error') console.log('PAGE ERROR:', m.text()); });
 page.on('pageerror', e => console.log('PAGE EXCEPTION:', e.message));
 
-await page.goto('http://localhost:5173', { waitUntil: 'networkidle', timeout: 15000 });
+const PORT = process.env.PORT || 5173;
+await page.goto(`http://localhost:${PORT}`, { waitUntil: 'networkidle', timeout: 15000 });
 // Let intro sweep finish
 await page.waitForTimeout(4000);
 

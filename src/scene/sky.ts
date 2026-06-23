@@ -22,16 +22,18 @@ export function makeSky(): THREE.CanvasTexture {
   g.fillStyle = grad;
   g.fillRect(0, 0, 512, 512);
 
-  // ── Concentrated horizon sun-glow: soft warm radial bloom low-left (sun side),
-  //    sitting on the amber band so the warm low sun reads without a hard disc.
+  // ── Horizon sun-glow: a broad, low warm brightening rising from the bottom
+  //    edge. Centred at bottom-centre and very diffuse so it reads as smooth
+  //    golden-hour horizon light — NOT a localized hotspot/disc. (A tight radial
+  //    blob here showed as a blown-out smudge in the open sky below the model.)
   g.save();
-  const glow = g.createRadialGradient(160, 400, 6, 160, 400, 200);
-  glow.addColorStop(0,   'rgba(255,238,200,0.16)'); // warm core (soft, not blown)
-  glow.addColorStop(0.4, 'rgba(255,216,152,0.07)');
-  glow.addColorStop(1,   'rgba(255,202,142,0.0)');  // fades out
+  const glow = g.createRadialGradient(256, 540, 20, 256, 540, 320);
+  glow.addColorStop(0,    'rgba(255,236,198,0.10)'); // warm core, gentle
+  glow.addColorStop(0.45, 'rgba(255,216,152,0.045)');
+  glow.addColorStop(1,    'rgba(255,202,142,0.0)');  // fades out smoothly
   g.globalCompositeOperation = 'lighter';
   g.fillStyle = glow;
-  g.fillRect(0, 280, 512, 232);
+  g.fillRect(0, 300, 512, 212);
   g.restore();
 
   // ── Faint high cirrus wisps — painted with deterministic seed positions

@@ -776,18 +776,59 @@ export function minaret(h: number): THREE.Group {
     g.add(ring);
   }
 
-  // ── DOME CAP (buff/sand sphere sits directly on cornice, no bare cylinder) ─
+  // ── LANTERN ROTUNDA CROWN (no sphere) ─────────────────────────────
+  // An arcaded lantern drum capped by a low pointed cone + slim gold spike.
+  // Replaces the former bulbous sand sphere, which read as a mushroom/golf-ball.
   const [lastYOff, , lastRH] = ringData[2];
-  const capBase = corniceBase + lastYOff * h + lastRH + h * 0.008;
-  const capR    = rTop * 1.05;  // slightly wider than top cornice ring for a clean shoulder
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(capR, 12, 10), mat(C.sand));
-  cap.position.y = capBase + capR * 0.82;
-  g.add(cap);
+  const crownBase = corniceBase + lastYOff * h + lastRH + h * 0.004;
 
-  // ── FINIAL ────────────────────────────────────────────────────────
-  const finial = new THREE.Mesh(new THREE.SphereGeometry(capR * 0.22, 8, 8), mat(C.gold));
-  finial.position.y = capBase + capR * 1.68;
-  g.add(finial);
+  // Lantern drum: blind-arcade gallery wrapped around a short cylinder.
+  const lanternR = rTop * 0.96;
+  const lanternH = h * 0.075;
+  const lanternTex = archPanel(256, 128);
+  lanternTex.wrapS = THREE.RepeatWrapping;
+  lanternTex.repeat.set(4, 1);
+  const lantern = new THREE.Mesh(
+    new THREE.CylinderGeometry(lanternR, lanternR * 1.02, lanternH, 16),
+    new THREE.MeshLambertMaterial({ map: lanternTex }),
+  );
+  lantern.position.y = crownBase + lanternH / 2;
+  lantern.castShadow = true;
+  g.add(lantern);
+
+  // Cream cornice lid over the lantern.
+  const lidR = lanternR * 1.14;
+  const lidH = h * 0.013;
+  const lid = new THREE.Mesh(
+    new THREE.CylinderGeometry(lidR, lanternR * 1.04, lidH, 16),
+    mat(C.cream),
+  );
+  lid.position.y = crownBase + lanternH + lidH / 2;
+  g.add(lid);
+
+  // Low pointed conical cap — glazed turquoise, distinctly non-spherical.
+  const coneBaseY = crownBase + lanternH + lidH;
+  const coneH = h * 0.085;
+  const coneCap = new THREE.Mesh(
+    new THREE.ConeGeometry(lidR * 0.95, coneH, 16),
+    new THREE.MeshLambertMaterial({
+      color: C.turquoise,
+      emissive: new THREE.Color(C.turquoise),
+      emissiveIntensity: 0.12,
+    }),
+  );
+  coneCap.position.y = coneBaseY + coneH / 2;
+  coneCap.castShadow = true;
+  g.add(coneCap);
+
+  // Slim gold finial spike (thin cone — no sphere).
+  const spikeH = h * 0.05;
+  const spike = new THREE.Mesh(
+    new THREE.ConeGeometry(rTop * 0.10, spikeH, 8),
+    mat(C.gold),
+  );
+  spike.position.y = coneBaseY + coneH + spikeH / 2 - h * 0.004;
+  g.add(spike);
 
   return g;
 }

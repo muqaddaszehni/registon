@@ -57,9 +57,17 @@ const css = `
   letter-spacing: 0.01em;
   color: #1f1a40;
 }
-/* EN titles → Kufic display; TJ titles → elegant Didone with full Tajik Cyrillic. */
+/* EN titles → Kufic display; TJ titles → Perso-Arabic Nastaliq (Samarkand script). */
 .card[data-lang="en"] h3 { font-family: 'Reem Kufi', 'Cormorant Garamond', Georgia, serif; letter-spacing: 0.005em; }
-.card[data-lang="tj"] h3 { font-family: 'Prata', 'Cormorant Garamond', Georgia, serif; letter-spacing: 0; font-weight: 400; }
+.card[data-lang="tj"] h3 {
+  font-family: 'Noto Nastaliq Urdu', 'Cormorant Garamond', Georgia, serif;
+  direction: rtl; text-align: right; unicode-bidi: plaintext;
+  font-weight: 500; letter-spacing: 0;
+  font-size: 30px; line-height: 2.0;            /* Nastaliq needs generous vertical room */
+  margin: 0 0 6px; padding: 2px 2px 6px;
+}
+/* TJ body → Yeseva One (elegant Cyrillic with full Tajik coverage). */
+.card[data-lang="tj"] p { font-family: 'Yeseva One', 'Cormorant Garamond', Georgia, serif; font-size: 16px; line-height: 1.85; }
 
 /* Decorative flourish: a slim gold rule with a central diamond, under the title. */
 .card .flourish {
@@ -184,7 +192,18 @@ export class Cards {
         <div class="flourish">${FLOURISH_SVG}</div>
         <p></p>
       </div>`;
-    this.el.querySelector('h3')!.textContent = c.title;
+    const h3 = this.el.querySelector('h3')!;
+    h3.textContent = c.title;
+    if (this.lang === 'tj') {
+      // Perso-Arabic Nastaliq title; keep Cyrillic for screen readers/search.
+      h3.setAttribute('lang', 'fa');
+      h3.setAttribute('dir', 'rtl');
+      if (c.titleAlt) h3.setAttribute('aria-label', c.titleAlt);
+    } else {
+      h3.removeAttribute('lang');
+      h3.removeAttribute('dir');
+      h3.removeAttribute('aria-label');
+    }
     this.el.querySelector('p')!.textContent = c.body;
     this.el.querySelector('.close')!.addEventListener('click', () => this.hide());
     this.el.classList.add('open');

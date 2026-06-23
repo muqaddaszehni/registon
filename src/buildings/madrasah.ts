@@ -232,10 +232,26 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   raised.add(courtFloor);
 
   // ── MINARETS ────────────────────────────────────────────────────
+  // Corner minarets overhang the plinth, so they're dropped to the plaza ground
+  // (world y=0 → raised-space y=-plinthH) and given a square stone footing.
+  // Without this they floated plinthH (0.6) above the plaza where off-plinth.
   for (const m of o.minarets ?? []) {
     const t = minaret(m.h);
-    t.position.x = m.offset;
+    t.position.set(m.offset, -plinthH, 0);
     raised.add(t);
+
+    // Square footing pedestal: from plaza ground up past the plinth top.
+    const baseR = m.h * 0.095;            // = minaret base radius
+    const padW  = baseR * 2.2;
+    const padH  = plinthH + 0.35;
+    const pad = new THREE.Mesh(
+      new THREE.BoxGeometry(padW, padH, padW),
+      plinthMat,
+    );
+    pad.position.set(m.offset, -plinthH + padH / 2, 0);
+    pad.castShadow = true;
+    pad.receiveShadow = true;
+    raised.add(pad);
   }
 
   // ── DOMES ───────────────────────────────────────────────────────
@@ -247,24 +263,23 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
     dd.position.set(d.offset, domeY, domeZ);
     raised.add(dd);
 
-    // When yLift > 0 the dome group sits above the wing roof, leaving a gap.
-    // Close it with a tall support drum that spans from the wing roof (y=0 here,
-    // i.e. y=wingH in raised-group space) up to the dome group origin (y=yLift above that).
-    // Radii match the dome's drum so the stack is seamless and continuous.
+    // When yLift > 0 the dome group sits above the wing roof. Carry it on a tall
+    // transition drum that reaches all the way DOWN into the actual roof beneath
+    // it (side/back wings are 0.87× wingH), not just to wingH — otherwise the
+    // drum (and dome) float ~0.9 above the lower courtyard-wing roof.
     if (yLift > 0) {
-      // drumR must match dome()'s own drum exactly: r * DRUM_R_FACTOR, bottom radius × 1.04
+      // drumR matches dome()'s own drum exactly: r * DRUM_R_FACTOR, bottom × 1.04
       const drumR = d.r * DRUM_R_FACTOR;
-      const drumRBottom = drumR * 1.04; // matches dome drum's bottom radius exactly
-      // Support height slightly exceeds yLift so it overlaps into the drum by 0.08,
-      // eliminating the coplanar joint (no z-fight, no visible gap).
-      const supportH = yLift + 0.08;
+      const drumRBottom = drumR * 1.04; // = dome drum's bottom radius (seamless joint)
+      const roofY  = o.wingH * 0.87;    // courtyard-wing roof height the drum stands on
+      const top    = domeY + 0.05;      // overlap up into the dome's own drum base
+      const bottom = roofY - 0.45;      // embed down into the wing roof (no gap/float)
+      const supportH = top - bottom;
       const support = new THREE.Mesh(
-        new THREE.CylinderGeometry(drumRBottom, drumRBottom * 1.06, supportH, 24),
+        new THREE.CylinderGeometry(drumRBottom, drumRBottom * 1.05, supportH, 28),
         new THREE.MeshLambertMaterial({ color: 0xc8b89a }), // warm sandstone
       );
-      // Center so bottom = wingH - 0.05 (slightly inside wing roof, no coplanar joint),
-      // top = wingH + yLift + 0.03 (overlaps into dome drum base, no gap/z-fight).
-      support.position.set(d.offset, o.wingH - 0.05 + supportH / 2, domeZ);
+      support.position.set(d.offset, bottom + supportH / 2, domeZ);
       support.castShadow = true;
       support.receiveShadow = true;
       raised.add(support);

@@ -25,7 +25,8 @@ const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, de
 page.on('pageerror', e => console.log('EXC:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.log('CONSOLE ERR:', m.text()); });
 
-await page.goto('http://localhost:5173/?dbg', { waitUntil: 'networkidle', timeout: 15000 });
+const PORT = process.env.PORT || 5173;
+await page.goto(`http://localhost:${PORT}/?dbg`, { waitUntil: 'networkidle', timeout: 15000 });
 await page.waitForTimeout(4500);  // let intro finish + LOD tier-2 textures rasterize
 
 for (const s of SHOTS) {
