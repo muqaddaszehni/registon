@@ -234,14 +234,26 @@ export function playBirdScatter(): void {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 export function addAudioToggle() {
-  let on = false;
+  // On by default. Autoplay policy forbids sound before any user gesture, so the
+  // engine is armed to start on the user's FIRST interaction (tap/click/key) —
+  // e.g. the very first tap-to-move — which is as close to "plays on landing" as
+  // browsers allow.
+  let on = true;
+  let started = false;
+  const start = () => { if (on && !started) { started = true; startEngine(); } };
+
   const btn = cornerButton('♪', 'Music', 1, () => {
     on = !on;
     btn.style.opacity = on ? '1' : '0.55';
     if (TRACK_URL) return;
-    if (on) { startEngine(); } else { stopEngine(); }
+    if (on) { started = true; startEngine(); } else { stopEngine(); }
   });
-  btn.style.opacity = '0.55'; // starts muted (autoplay policy + spec)
+  btn.style.opacity = '1'; // on by default
+
+  // Arm autostart on first gesture (each fires once; resume is idempotent).
+  for (const ev of ['pointerdown', 'touchstart', 'keydown'] as const) {
+    window.addEventListener(ev, start, { once: true });
+  }
 }
 
 // (window.__audioCtx / window.__masterGain set in buildGraph for E2E RMS tests)

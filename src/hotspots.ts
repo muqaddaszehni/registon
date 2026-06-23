@@ -28,11 +28,11 @@ function makeGlowTexture(): THREE.CanvasTexture {
 /** Glowing star tiles; returns a tick function that pulses them. */
 export function addHotspotMarkers(scene: THREE.Scene, grid: Grid): (dt: number) => void {
   const mats: THREE.MeshLambertMaterial[] = [];
-  // Soft "tap here" halo on the FIRST hotspot — an additive glow disc that
-  // breathes more strongly than the markers, signalling interactivity.
+  // Soft "tap here" halo on THE REGISTAN hotspot (id 7) — a turquoise additive
+  // glow pool that breathes, signalling the scene is interactive.
   let glowMat: THREE.MeshBasicMaterial | null = null;
-  let first = true;
-  for (const [, tile] of grid.hotspots) {
+  const GLOW_TURQUOISE = 0x37d2e0;
+  for (const [id, tile] of grid.hotspots) {
     const w = tileToWorld(grid.cols, grid.rows, tile);
     const m = new THREE.MeshLambertMaterial({
       color: C.gold, emissive: C.gold, emissiveIntensity: 0.5,
@@ -44,16 +44,14 @@ export function addHotspotMarkers(scene: THREE.Scene, grid: Grid): (dt: number) 
     scene.add(marker);
     mats.push(m);
 
-    if (first) {
-      first = false;
-      // Soft radial-gradient glow pool (bright centre → transparent edge) so it
-      // reads as a soft halo, not a hard disc.
+    if (id === 7) {
+      // Soft radial-gradient glow pool (bright centre → transparent edge).
       const glowTex = makeGlowTexture();
       glowMat = new THREE.MeshBasicMaterial({
-        map: glowTex, color: C.gold, transparent: true, opacity: 0.0,
+        map: glowTex, color: GLOW_TURQUOISE, transparent: true, opacity: 0.0,
         blending: THREE.AdditiveBlending, depthWrite: false,
       });
-      const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), glowMat);
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), glowMat);
       glow.rotation.x = -Math.PI / 2;
       glow.position.set(w.x, 0.065, w.z); // soft pool of light around the marker
       glow.renderOrder = -1;

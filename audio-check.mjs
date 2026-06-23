@@ -10,8 +10,8 @@ page.on('console', m => { if (m.type() === 'error') errors.push('ERR: ' + m.text
 await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle', timeout: 15000 });
 await page.waitForTimeout(3500);
 
-// Turn music on (creates + resumes the shared AudioContext)
-await page.locator('[aria-label="Music"]').click();
+// Music is on by default; a first user gesture (tap the canvas) unlocks audio.
+await page.locator('canvas').click({ position: { x: 640, y: 560 } });
 await page.waitForTimeout(2500);
 
 const music = await page.evaluate(async () => {

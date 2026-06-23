@@ -5,8 +5,8 @@ export const C = {
   marble: 0xe8e3d6,
   // Plaza
   plaza: 0xeee4d5, plazaPath: 0xd8cebb,
-  // Blues
-  cobalt: 0x1e5fa8, lapis: 0x16396e,
+  // Blues (lightened a touch so the dark-blue tilework reads bluer, less black)
+  cobalt: 0x2a6cb8, lapis: 0x214a82,
   // Greens
   turquoise: 0x42c8c8, teal: 0x2fa8a8,
   // Dome glazes — brighter/more cyan than the wall turquoise so the domes read as

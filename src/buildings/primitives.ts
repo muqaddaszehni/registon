@@ -705,7 +705,7 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
   return g;
 }
 
-/** Tapered minaret with bannai shaft, corbel cornice rings, balcony gallery (sharafa), and buff dome cap. */
+/** Single tapered minaret tower: bannai shaft, corbel cornice rings, flat lantern crown. */
 export function minaret(h: number): THREE.Group {
   const g = new THREE.Group();
 
@@ -720,44 +720,8 @@ export function minaret(h: number): THREE.Group {
   shaft.position.y = shaftH / 2;
   g.add(shaft);
 
-  // ── MID-SHAFT SHARAFA (balcony ring at ~55% height) ──────────────
-  // The signature corbelled balcony gallery partway up — sharafa.
-  // Three corbel rings + a wider gallery band + a slim railing ring above.
-  const sharafaBase = shaftH * 0.55;
-  // Radius at sharafa height (linearly interpolated on the tapered shaft)
-  const rAtSharafa = rBase + (rTop - rBase) * 0.55;
-  // Three corbel rings stepping outward
-  const sCorbels: [number, number, number][] = [
-    [0.000, rAtSharafa * 1.08, h * 0.014],
-    [0.018, rAtSharafa * 1.18, h * 0.016],
-    [0.040, rAtSharafa * 1.30, h * 0.018],
-  ];
-  for (const [yOff, r, rh] of sCorbels) {
-    const ring = new THREE.Mesh(
-      new THREE.CylinderGeometry(r, r * 0.95, rh, 16),
-      mat(C.sandDark),
-    );
-    ring.position.y = sharafaBase + yOff * h + rh / 2;
-    g.add(ring);
-  }
-  const [sLastY, , sLastH] = sCorbels[2];
-  const sGalleryBase = sharafaBase + sLastY * h + sLastH;
-  const sGalleryR    = rAtSharafa * 1.28;
-  const sGalleryH    = h * 0.040;
-  const sGalleryTex  = archPanel(192, 96);
-  const sGallery = new THREE.Mesh(
-    new THREE.CylinderGeometry(sGalleryR, sGalleryR, sGalleryH, 16),
-    new THREE.MeshLambertMaterial({ map: sGalleryTex }),
-  );
-  sGallery.position.y = sGalleryBase + sGalleryH / 2;
-  g.add(sGallery);
-  // Slim railing ring above gallery
-  const sRailing = new THREE.Mesh(
-    new THREE.CylinderGeometry(sGalleryR * 1.04, sGalleryR, h * 0.010, 16),
-    mat(C.cream),
-  );
-  sRailing.position.y = sGalleryBase + sGalleryH + h * 0.005;
-  g.add(sRailing);
+  // Single continuous tapering tower — the mid-shaft balcony (sharafa) was
+  // removed so the minaret reads as ONE tower, not two stacked cylinders.
 
   // ── CORBEL CORNICE (3 stacking rings, widening outward) ──────────
   const corniceBase = shaftH;
