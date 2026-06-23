@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 
 /**
  * Cinematic golden-hour grade shader.
@@ -82,31 +83,49 @@ export function makeComposer(
   // to a plain target that BYPASSES the renderer's antialias:true — so geometry
   // edges and thin tile-grid lines aliased and "crawled"/glimmered during camera
   // rotation. HalfFloat keeps HDR headroom for clean bloom.
+  const q = location.search;
+  // No MSAA by default: the multisampled HalfFloat resolve was the single
+  // biggest GPU cost at DPR2 (~+18ms). SMAA (below) does all anti-aliasing at a
+  // fraction of the cost with visually identical edges. Flags allow A/B testing.
+  const samples = q.includes('msaa4') ? 4 : q.includes('msaa2') ? 2 : 0;
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const renderTarget = new THREE.WebGLRenderTarget(size.x, size.y, {
     type: THREE.HalfFloatType,
-    samples: 4,
+    samples,
   });
   const composer = new EffectComposer(renderer, renderTarget);
 
   composer.addPass(new RenderPass(scene, camera));
 
-  const bloom = new UnrealBloomPass(
-    new THREE.Vector2(innerWidth, innerHeight),
-    0.12,   // strength — trimmed so bright tile highlights on dark blue don't bloom-flicker
-    0.5,    // radius — tight, prevents bleed
-    0.90,   // threshold — raised so only the brightest emissive (domes/finials) blooms
-  );
-  composer.addPass(bloom);
+  if (!q.includes('nobloom')) {
+    // Bloom runs at HALF resolution. Bloom is a low-frequency blur, so half-res
+    // is visually identical but ~4× cheaper. setSize is overridden so it stays
+    // half whatever drawing-buffer size the composer hands it.
+    const bloom = new UnrealBloomPass(
+      new THREE.Vector2(Math.max(1, size.x / 2), Math.max(1, size.y / 2)),
+      0.12,   // strength — trimmed so bright tile highlights on dark blue don't bloom-flicker
+      0.5,    // radius — tight, prevents bleed
+      0.90,   // threshold — raised so only the brightest emissive (domes/finials) blooms
+    );
+    const baseSetSize = UnrealBloomPass.prototype.setSize;
+    bloom.setSize = function (w: number, h: number) {
+      baseSetSize.call(this, Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2)));
+    };
+    composer.addPass(bloom);
+  }
 
   composer.addPass(new ShaderPass(GoldenGradeShader));
 
   composer.addPass(new OutputPass());
 
-  // SMAA on the final tonemapped image. MSAA only smooths geometry edges; SMAA
-  // also smooths high-contrast colour edges *inside* textures (the cobalt/turquoise
-  // girih lattice), which were the residual shimmer around the dark-blue tilework.
-  composer.addPass(new SMAAPass());
+  // FXAA does ALL anti-aliasing now (geometry edges + the texture-interior
+  // cobalt/turquoise girih lattice). At DPR2 the 2× supersample already carries
+  // most AA, so FXAA's single cheap pass matches MSAA4+SMAA visually while
+  // leaving large GPU headroom (→ solid 60 even on big windows / while walking).
+  // `?smaa` swaps the sharper-but-pricier SMAA; `?noaa` disables AA.
+  if (!q.includes('noaa')) {
+    composer.addPass(q.includes('smaa') ? new SMAAPass() : new FXAAPass());
+  }
 
   return composer;
 }

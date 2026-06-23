@@ -53,17 +53,29 @@ addEventListener('resize', () => {
   sizeCamera(camera, orbit.state.zoom);
 });
 
+const NO_POST = location.search.includes('nopost'); // perf diagnostic: bypass the composer
 let last = performance.now();
 const tickers: Array<(dt: number) => void> = [];
 export function onTick(fn: (dt: number) => void) { tickers.push(fn); }
 
+// Lightweight rolling perf counters (exposed for the FPS harness; ~free).
+const perf = { fps: 0, frameMs: 0, cpuMs: 0, calls: 0, tris: 0 };
+(window as unknown as Record<string, unknown>).__perf = perf;
+let emaInt = 16.7, emaCpu = 4;
+
 renderer.setAnimationLoop(() => {
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 0.05);
+  const interval = now - last;
   last = now;
   for (const t of tickers) t(dt);
   lodManager.tick(); // process one canvas from stagger queue per frame
-  composer.render();
+  if (NO_POST) renderer.render(scene, camera); else composer.render();
+  const cpu = performance.now() - now;
+  emaInt += (interval - emaInt) * 0.1;
+  emaCpu += (cpu - emaCpu) * 0.1;
+  perf.frameMs = emaInt; perf.cpuMs = emaCpu; perf.fps = 1000 / emaInt;
+  perf.calls = renderer.info.render.calls; perf.tris = renderer.info.render.triangles;
 });
 
 // Zoom + pan controllers
@@ -125,6 +137,20 @@ onTick(addTrees(scene));
 addGardens(scene);
 onTick(addDoves(scene, grid, () => hero.worldPos));
 onTick(addMotes(scene));
+
+// ── STATIC SHADOW MAP ────────────────────────────────────────────────────
+// The sun and all buildings are fixed, so the shadow map (≈662 shadow-caster
+// draw calls — the single biggest per-frame cost) does NOT need to re-render
+// every frame. Freeze it and only refresh on demand while the hero walks
+// (and a few frames after, so the resting shadow lands correctly). This is a
+// pure perf win with no visual change to the static scene.
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true; // render the static shadows once
+let shadowHold = 4;                     // assert for the first frames (deferred adds settle)
+onTick(() => {
+  if (hero.moving) shadowHold = 4;
+  if (shadowHold > 0) { renderer.shadowMap.needsUpdate = true; shadowHold--; }
+});
 
 // ── DEBUG INSPECTION HOOK (only active with ?dbg in the URL) ──────────────
 // Lets an offline screenshot harness frame any block (facade/portal/minaret/

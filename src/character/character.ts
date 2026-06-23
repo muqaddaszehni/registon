@@ -121,6 +121,9 @@ export class Character {
 
   get worldPos(): V2 { return { ...this.pos }; }
 
+  /** True while walking a path (used to drive on-demand shadow-map updates). */
+  get moving(): boolean { return this.waypoints.length > 0; }
+
   get tile(): Pt { return worldToTile(this.grid.cols, this.grid.rows, this.pos); }
 
   walkTo(target: Pt): boolean {
