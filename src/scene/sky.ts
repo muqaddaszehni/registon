@@ -5,35 +5,30 @@ export function makeSky(): THREE.CanvasTexture {
   cv.width = 512; cv.height = 512;
   const g = cv.getContext('2d')!;
 
-  // ── Multi-stop gradient: soft violet zenith → cool periwinkle mid-sky
-  //    → warm peach → amber horizon. Smooth, finely-stepped so no banding shows.
-  // Values are pre-compensated for ACES desaturation through EffectComposer.
-  // ACES compresses warm channels, so source peach/amber values are boosted.
+  // ── Clear-day sky to match the Wikipedia photos: a soft daytime blue zenith
+  //    easing to a pale, faintly-warm haze at the horizon (the dawn-panorama
+  //    look). Values are pre-compensated for ACES desaturation downstream.
   const grad = g.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0,    '#80709e'); // soft violet zenith (not too dark — golden hour, sky still lit)
-  grad.addColorStop(0.18, '#9788b2'); // muted violet
-  grad.addColorStop(0.34, '#b49fbe'); // periwinkle-mauve
-  grad.addColorStop(0.48, '#cdb1b2'); // dusty mauve→warm transition (neutral blend point)
-  grad.addColorStop(0.62, '#e8c49e'); // warm peach
-  grad.addColorStop(0.74, '#ffd2a0'); // bright peach (sun-glow band, ACES-compensated)
-  grad.addColorStop(0.85, '#ffc488'); // amber
-  grad.addColorStop(0.94, '#ffb474'); // deeper amber
-  grad.addColorStop(1,    '#ffa866'); // rich amber at horizon base
+  grad.addColorStop(0,    '#6f9fd2'); // daytime blue zenith
+  grad.addColorStop(0.22, '#86b0db'); // sky blue
+  grad.addColorStop(0.44, '#a6c8e6'); // lighter blue
+  grad.addColorStop(0.64, '#c8dcec'); // pale blue
+  grad.addColorStop(0.82, '#e0ebf0'); // very pale haze
+  grad.addColorStop(0.93, '#edf0ec'); // pale warm-white horizon
+  grad.addColorStop(1,    '#f3ede0'); // faint warm dust at the horizon base
   g.fillStyle = grad;
   g.fillRect(0, 0, 512, 512);
 
-  // ── Horizon sun-glow: a broad, low warm brightening rising from the bottom
-  //    edge. Centred at bottom-centre and very diffuse so it reads as smooth
-  //    golden-hour horizon light — NOT a localized hotspot/disc. (A tight radial
-  //    blob here showed as a blown-out smudge in the open sky below the model.)
+  // ── Soft horizon haze: a gentle pale brightening at the horizon (atmospheric
+  //    depth on a clear day), no warm sunset disc.
   g.save();
-  const glow = g.createRadialGradient(256, 540, 20, 256, 540, 320);
-  glow.addColorStop(0,    'rgba(255,236,198,0.10)'); // warm core, gentle
-  glow.addColorStop(0.45, 'rgba(255,216,152,0.045)');
-  glow.addColorStop(1,    'rgba(255,202,142,0.0)');  // fades out smoothly
+  const glow = g.createRadialGradient(256, 560, 30, 256, 560, 340);
+  glow.addColorStop(0,    'rgba(245,245,238,0.10)');
+  glow.addColorStop(0.5,  'rgba(235,238,238,0.04)');
+  glow.addColorStop(1,    'rgba(230,235,238,0.0)');
   g.globalCompositeOperation = 'lighter';
   g.fillStyle = glow;
-  g.fillRect(0, 300, 512, 212);
+  g.fillRect(0, 320, 512, 192);
   g.restore();
 
   // ── Faint high cirrus wisps — painted with deterministic seed positions

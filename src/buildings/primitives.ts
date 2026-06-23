@@ -713,10 +713,10 @@ export function minaret(h: number): THREE.Group {
   const shaftTex = minaretShaft();
   shaftTex.repeat.set(1, Math.max(1, Math.round(h / 8)));
   const shaftMat = new THREE.MeshLambertMaterial({ map: shaftTex });
-  const rBase = h * 0.095;  // slightly fatter base (real ones are stout)
-  const rTop  = h * 0.058;  // top of shaft just below cornice
+  const rBase = h * 0.072; // slender, like the real Registan minarets
+  const rTop  = h * 0.050; // gentle taper to the gallery
   const shaftH = h * 0.88;
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBase, shaftH, 16), shaftMat);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBase, shaftH, 20), shaftMat);
   shaft.position.y = shaftH / 2;
   g.add(shaft);
 

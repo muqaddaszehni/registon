@@ -22,9 +22,9 @@ import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 const GoldenGradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
-    uTint: { value: new THREE.Color(1.045, 1.005, 0.95) }, // warm: +R, ~G, -B
-    uVignette: { value: 0.28 },   // strength of corner darkening
-    uContrast: { value: 0.06 },   // gentle S-curve amount
+    uTint: { value: new THREE.Color(1.04, 1.012, 0.966) }, // warm daylight grade → buff stone reads warm tan
+    uVignette: { value: 0.16 },   // light corner darkening (daytime — less cinematic vignette)
+    uContrast: { value: 0.05 },   // gentle S-curve amount
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;

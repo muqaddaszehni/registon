@@ -34,7 +34,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.92;
+renderer.toneMappingExposure = 1.0; // brighter clear-day exposure (was dim golden-hour 0.92)
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
