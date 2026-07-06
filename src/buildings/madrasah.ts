@@ -1,7 +1,60 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { pishtaq, minaret, dome, shadowed, patternedBoxMulti, recessedHujraFace, DRUM_R_FACTOR } from './primitives';
 import { C } from '../palette';
 import { bannai, brickWall, type PortalVariant } from '../patterns/textures';
+
+// ── STATIC GEOMETRY MERGE (perf #1) ──────────────────────────────────────────
+// A madrasa is fully static, but it emits hundreds of small meshes that share a
+// handful of materials. This finalizer bakes each opaque, single-material mesh's
+// transform into its geometry and merges everything with a visually-identical
+// material into ONE mesh — a pixel-identical result at a fraction of the draw
+// calls. Multi-material meshes (patterned wing boxes, arch screens, cornices) and
+// transparent meshes (lantern glows) are left untouched.
+function matSig(m: THREE.Material): string {
+  const mm = m as unknown as Record<string, { getHexString?: () => string; uuid?: string } | number | boolean | undefined>;
+  const col = (mm.color as { getHexString?: () => string })?.getHexString?.() ?? '-';
+  const map = (mm.map as { uuid?: string })?.uuid ?? '-';
+  const emi = (mm.emissive as { getHexString?: () => string })?.getHexString?.() ?? '-';
+  return [
+    m.type, col, map, emi, mm.emissiveIntensity ?? '-', m.side,
+    mm.flatShading ? 1 : 0, m.opacity, mm.blending ?? '-', m.depthWrite ? 1 : 0,
+    m.polygonOffset ? 1 : 0, m.polygonOffsetFactor ?? 0, m.polygonOffsetUnits ?? 0,
+    mm.wireframe ? 1 : 0, mm.vertexColors ? 1 : 0,
+  ].join('|');
+}
+
+function mergeStaticByMaterial(root: THREE.Group): void {
+  root.updateMatrixWorld(true); // root is at identity here → matrixWorld == local-to-root
+  interface Bucket { mat: THREE.Material; cast: boolean; recv: boolean; geos: THREE.BufferGeometry[]; meshes: THREE.Mesh[]; }
+  const buckets = new Map<string, Bucket>();
+  root.traverse(o => {
+    if (!(o instanceof THREE.Mesh) || !o.geometry) return;
+    if (Array.isArray(o.material)) return;               // leave multi-material meshes
+    const mat = o.material as THREE.Material;
+    if (mat.transparent) return;                         // leave transparent meshes (draw-order)
+    if (!o.geometry.attributes.position) return;
+    const attribSig = Object.keys(o.geometry.attributes).sort().join(',');
+    const key = matSig(mat) + '#' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + '#' + attribSig;
+    let bk = buckets.get(key);
+    if (!bk) { bk = { mat, cast: o.castShadow, recv: o.receiveShadow, geos: [], meshes: [] }; buckets.set(key, bk); }
+    bk.geos.push(o.geometry.clone().applyMatrix4(o.matrixWorld).toNonIndexed());
+    bk.meshes.push(o);
+  });
+  const mergedGroup = new THREE.Group();
+  mergedGroup.name = 'madrasah-merged';
+  for (const bk of buckets.values()) {
+    if (bk.meshes.length < 2) { bk.geos.forEach(g => g.dispose()); continue; } // nothing to gain
+    const merged = mergeGeometries(bk.geos, false);
+    bk.geos.forEach(g => g.dispose());
+    if (!merged) continue;                                // attribute mismatch → leave originals
+    const mesh = new THREE.Mesh(merged, bk.mat);
+    mesh.castShadow = bk.cast; mesh.receiveShadow = bk.recv;
+    mergedGroup.add(mesh);
+    bk.meshes.forEach(m => m.removeFromParent());
+  }
+  root.add(mergedGroup);
+}
 
 export interface MadrasahOpts {
   facadeLen: number;        // total width along its plaza edge
@@ -362,5 +415,8 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
       o.traverse(m => { if (m instanceof THREE.Mesh) m.castShadow = false; });
     }
   });
+  // Collapse the static single-material meshes by material (perf #1). Runs AFTER
+  // the shadow flags are finalized so cast/receive are baked into the buckets.
+  mergeStaticByMaterial(finalized);
   return finalized;
 }
