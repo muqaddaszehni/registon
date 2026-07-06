@@ -1470,5 +1470,13 @@ export function recessedHujraFace(
   corniceUnderTrim.position.set(0, corniceY + 0.035, SCREEN_FRONT + 0.08);  // 0.08 proud of screen, clear of frame/outline
   g.add(corniceUnderTrim);
 
+  // PERF (#3 shadow-caster pruning): the solid wing box directly behind this
+  // arcade already casts the wing silhouette, and the arcade's own recess self-
+  // shadow is faked by the dark soffit/back-wall materials. The proud relief in
+  // front (screens, pilasters, frames, returns, sills, cornice…) is therefore a
+  // redundant shadow caster. Tag the whole face so madrasah()'s finalizer drops
+  // it from the shadow pass — the single biggest caster reduction, ~invisible.
+  g.userData.noCast = true;
+
   return g;
 }

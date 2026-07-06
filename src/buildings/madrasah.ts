@@ -350,5 +350,17 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
   }
 
   g.add(raised);
-  return shadowed(g);
+
+  // Enable shadows on the whole madrasa, then prune redundant casters (#3):
+  // the big silhouette pieces (plinth, wings, portal, minarets, domes, drums,
+  // turrets) keep casting; each recessed-hujra arcade face is tagged noCast
+  // (its solid wing box already casts the silhouette) and is dropped from the
+  // shadow pass. receiveShadow stays on everywhere so surfaces still catch light.
+  const finalized = shadowed(g);
+  finalized.traverse(o => {
+    if (o.userData?.noCast) {
+      o.traverse(m => { if (m instanceof THREE.Mesh) m.castShadow = false; });
+    }
+  });
+  return finalized;
 }
