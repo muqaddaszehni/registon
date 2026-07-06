@@ -84,8 +84,8 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
   const inlayFill   = 0xe0d4ba;                       // soft inlay fill (slightly darker buff)
   const inlayFillHex = hex(inlayFill);
 
-  // Medallion stroke colours
-  const medalStroke = darken(plazaNum, 0.26);         // warm mid-grey ink
+  // Medallion stroke colours — raised contrast so paving art reads at default zoom.
+  const medalStroke = darken(plazaNum, 0.42);         // warm taupe ink (≈0x8e8b86)
 
   // ── 1. Base fill ─────────────────────────────────────────────────────────
   g.fillStyle = baseHex;
@@ -188,7 +188,8 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
   g.restore();
 
   // ── 4. Blocked footprint darkening ────────────────────────────────────────
-  const blockedFill = darken(plazaNum, 0.07);
+  // Stronger flat fill so the buildings read as seated on the plaza (was 0.07).
+  const blockedFill = darken(plazaNum, 0.16);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if ((LAYOUT[r]?.[c] ?? '#') === '#') {
@@ -196,6 +197,44 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
         g.fillRect(c * tW, r * tH, tW, tH);
       }
     }
+  }
+
+  // ── 4a. Soft contact-occlusion halo hugging the footprint perimeter ───────
+  // For every blocked tile that borders the open plaza, bleed a short dark
+  // gradient OUT onto the plaza so wall bases read grounded (omnidirectional AO
+  // the directional sun shadow-map can't give). Pure raster work, zero runtime.
+  {
+    g.save();
+    const aoDepth = tW * 1.3;
+    const aoCol = '40,26,8';                       // warm shadow ink
+    const blocked = (rr: number, cc: number) => (LAYOUT[rr]?.[cc] ?? '#') === '#';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!blocked(r, c)) continue;
+        const x0 = c * tW, y0 = r * tH;
+        if (!blocked(r, c - 1)) { // open to the left
+          const gr = g.createLinearGradient(x0, 0, x0 - aoDepth, 0);
+          gr.addColorStop(0, `rgba(${aoCol},0.24)`); gr.addColorStop(1, `rgba(${aoCol},0)`);
+          g.fillStyle = gr; g.fillRect(x0 - aoDepth, y0, aoDepth, tH);
+        }
+        if (!blocked(r, c + 1)) { // open to the right
+          const gr = g.createLinearGradient(x0 + tW, 0, x0 + tW + aoDepth, 0);
+          gr.addColorStop(0, `rgba(${aoCol},0.24)`); gr.addColorStop(1, `rgba(${aoCol},0)`);
+          g.fillStyle = gr; g.fillRect(x0 + tW, y0, aoDepth, tH);
+        }
+        if (!blocked(r - 1, c)) { // open above
+          const gr = g.createLinearGradient(0, y0, 0, y0 - aoDepth);
+          gr.addColorStop(0, `rgba(${aoCol},0.24)`); gr.addColorStop(1, `rgba(${aoCol},0)`);
+          g.fillStyle = gr; g.fillRect(x0, y0 - aoDepth, tW, aoDepth);
+        }
+        if (!blocked(r + 1, c)) { // open below
+          const gr = g.createLinearGradient(0, y0 + tH, 0, y0 + tH + aoDepth);
+          gr.addColorStop(0, `rgba(${aoCol},0.24)`); gr.addColorStop(1, `rgba(${aoCol},0)`);
+          g.fillStyle = gr; g.fillRect(x0, y0 + tH, tW, aoDepth);
+        }
+      }
+    }
+    g.restore();
   }
 
   // South entrance column: find the 'S' tile (shared by lattice + walkway)
@@ -231,7 +270,7 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
     // Diagonal lattice lines (two families at ±45°) → diamond/cross grid.
     g.strokeStyle = inlayInkHex;
     g.lineWidth = Math.max(0.9, tW * 0.035);
-    g.globalAlpha = 0.16;
+    g.globalAlpha = 0.24;
     const diag = openR - openL + (openB - openT);
     for (let d = -diag; d < diag; d += cell) {
       // family A: y = x + k
@@ -241,7 +280,7 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
     }
 
     // Small interlace star node at each lattice intersection (grid of `cell`).
-    g.globalAlpha = 0.2;
+    g.globalAlpha = 0.3;
     const nodeR = cell * 0.16;
     for (let gx = cxC - Math.ceil((cxC - openL) / cell) * cell; gx < openR + cell; gx += cell) {
       for (let gy = cyC - Math.ceil((cyC - openT) / cell) * cell; gy < openB + cell; gy += cell) {
@@ -292,6 +331,35 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
     g.restore();
   }
 
+  // ── 5b. Cross-axis (E–W) walkway band + plaza perimeter kerb ──────────────
+  // Mirror the N–S runner into one perpendicular band so the plaza reads as a
+  // structured precinct (the ref's strong cross-grid), not a single stripe.
+  {
+    const ewCenterRow = 13;                 // tile-row latitude of the cross path
+    const ewH = tH * 3;                      // 3 tiles tall
+    const ewTop = (ewCenterRow - 1.5) * tH;
+    g.save();
+    g.fillStyle = walkHex;
+    g.fillRect(openL, ewTop, openR - openL, ewH);
+    // twin kerb edge bands (top + bottom), like the N–S runner
+    g.strokeStyle = walkDarkHex;
+    g.lineWidth = Math.max(2, tW * 0.09);
+    g.beginPath(); g.moveTo(openL, ewTop + g.lineWidth * 0.5); g.lineTo(openR, ewTop + g.lineWidth * 0.5); g.stroke();
+    g.beginPath(); g.moveTo(openL, ewTop + ewH - g.lineWidth * 0.5); g.lineTo(openR, ewTop + ewH - g.lineWidth * 0.5); g.stroke();
+    g.restore();
+    // Herringbone borders flanking the band (reuse helper, bricks rotated for a horizontal run)
+    const ewBrickW = tW * 0.55, ewBrickH = tW * 0.28, ewBandW = tW * 0.85;
+    drawHerringboneBorder(g, openL, ewTop - ewBandW, openR - openL, ewBandW, ewBrickH, ewBrickW, brickDark, brickLight, brickMortarHex, 0.6);
+    drawHerringboneBorder(g, openL, ewTop + ewH, openR - openL, ewBandW, ewBrickH, ewBrickW, brickDark, brickLight, brickMortarHex, 0.6);
+    // Thin perimeter kerb framing the whole open precinct.
+    g.save();
+    g.strokeStyle = walkDarkHex;
+    g.lineWidth = Math.max(1.5, tW * 0.06);
+    g.globalAlpha = 0.55;
+    g.strokeRect(openL, openT, openR - openL, openB - openT);
+    g.restore();
+  }
+
   // ── 6. Star/cross medallion runner down the walkway ───────────────────────
   // A spine of geometric inlay medallions, only within the open plaza depth so
   // none land under the south gate footprint.
@@ -299,7 +367,7 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
   const inlaySpacing = tH * 3.4;
   const inlayRadius = walkWidth * 0.33;
   for (let y = tH * 4.5; y < tH * 18.5; y += inlaySpacing) {
-    drawStarCrossMedallion(g, walkCenterX, y, inlayRadius, medalStroke, walkDarkHex, 0.7);
+    drawStarCrossMedallion(g, walkCenterX, y, inlayRadius, medalStroke, walkDarkHex, 0.9);
   }
 
   // ── 7. Herringbone brick border edging walkway ────────────────────────────
@@ -328,15 +396,15 @@ function drawGround(g: CanvasRenderingContext2D, w: number, h: number): void {
   // ── 9. Marble inlay roundel medallions ────────────────────────────────────
   // A few elegant roundels — four flanking the walkway in the open plaza, none
   // under the buildings. Subtle floor art, warm and light.
-  const medalPositions: [number, number][] = [
-    [6.5,  7.0],
-    [6.5,  13.0],
-    [21.5, 7.0],
-    [21.5, 13.0],
-  ];
-  const medalRadius = tW * 2.3;
-  for (const [mc, mr] of medalPositions) {
-    drawRoundelMedallion(g, mc * tW, mr * tH, medalRadius, medalStroke, baseHex, walkHex);
+  // Tiled edge-to-edge grid (the ref's paving is DOMINATED by these): two flanking
+  // columns each side of the axis × four z-rows, near-touching for a carpet read.
+  const medalCols = [6.5, 10.5, 17.5, 21.5];
+  const medalRows = [5, 9, 13, 17];
+  const medalRadius = tW * 2.75;
+  for (const mc of medalCols) {
+    for (const mr of medalRows) {
+      drawRoundelMedallion(g, mc * tW, mr * tH, medalRadius, medalStroke, baseHex, walkHex);
+    }
   }
 
   // ── 10. Sand/dust drift weathering near edges & building bases ────────────
@@ -563,7 +631,7 @@ function drawRoundelMedallion(
 ): void {
   g.save();
   g.lineJoin = 'round';
-  g.globalAlpha = 0.34;
+  g.globalAlpha = 0.5;
   g.strokeStyle = strokeColor;
   g.lineWidth = Math.max(0.8, r * 0.035);
 
@@ -576,7 +644,7 @@ function drawRoundelMedallion(
 
   // Petal ring: 12 arc-petals between inner rings
   const nPetals = 12;
-  g.globalAlpha = 0.2;
+  g.globalAlpha = 0.36;
   g.fillStyle = accentHex;
   for (let i = 0; i < nPetals; i++) {
     const angle = (i / nPetals) * Math.PI * 2;
@@ -591,7 +659,7 @@ function drawRoundelMedallion(
   }
 
   // Spoke lines
-  g.globalAlpha = 0.26;
+  g.globalAlpha = 0.42;
   g.strokeStyle = strokeColor;
   g.lineWidth = Math.max(0.5, r * 0.02);
   for (let i = 0; i < nPetals; i++) {
@@ -610,7 +678,7 @@ function drawRoundelMedallion(
   g.fill();
 
   // Outer ring thick accent
-  g.globalAlpha = 0.18;
+  g.globalAlpha = 0.3;
   g.lineWidth = Math.max(1.5, r * 0.06);
   g.strokeStyle = strokeColor;
   g.beginPath();
@@ -649,27 +717,71 @@ export function makeGround(): THREE.Mesh {
 }
 
 /**
- * Earth-tone apron extending beyond the main slab on west/east/north sides.
+ * Earth-tone apron extending beyond the main slab on ALL FOUR sides.
+ * Top course is raised flush with the slab top (y=0) to kill the old 0.05 seam,
+ * and a darker base course beneath gives the plinth real thick-stone depth so the
+ * diorama stops reading as thin cardboard.
  */
 export function makeApron(): THREE.Group {
   const grp = new THREE.Group();
   grp.name = 'apron';
 
-  const apronMat = new THREE.MeshLambertMaterial({ color: 0xb8a882 });
-  const apronY = -0.3;
-  const apronH = 0.5;
+  const apronMat = new THREE.MeshLambertMaterial({ color: 0xb8a882 }); // warm top course
+  const baseMat  = new THREE.MeshLambertMaterial({ color: 0x8a7a58 }); // darker base course
+  const apronH = 0.55, apronY = -0.275;   // top flush at y=0 (kills the 0.05 reveal seam)
+  const baseH  = 0.30,  baseY  = -0.70;    // thick base course under the apron
 
-  const west = new THREE.Mesh(new THREE.BoxGeometry(7, apronH, 22), apronMat);
-  west.position.set(-17.5, apronY, 0);
-  grp.add(west);
-
-  const east = new THREE.Mesh(new THREE.BoxGeometry(7, apronH, 22), apronMat);
-  east.position.set(17.5, apronY, 0);
-  grp.add(east);
-
-  const north = new THREE.Mesh(new THREE.BoxGeometry(42, apronH, 9), apronMat);
-  north.position.set(0, apronY, -15.5);
-  grp.add(north);
+  // [width, depth, x, z] — west, east, north, and the new south strip (4-sided).
+  const slabs: [number, number, number, number][] = [
+    [7, 22, -17.5, 0],
+    [7, 22,  17.5, 0],
+    [42, 9,  0, -15.5],
+    [42, 9,  0,  15.5],
+  ];
+  for (const [w, d, x, z] of slabs) {
+    const top = new THREE.Mesh(new THREE.BoxGeometry(w, apronH, d), apronMat);
+    top.position.set(x, apronY, z);
+    grp.add(top);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w, baseH, d), baseMat);
+    base.position.set(x, baseY, z);
+    grp.add(base);
+  }
 
   return grp;
+}
+
+/**
+ * Single soft drop-shadow blob that seats the floating diorama to an implied
+ * ground — the #1 fix for the "weightless clay" read. An elliptical radial
+ * CanvasTexture on one horizontal plane below the plinth. depthWrite off + low
+ * renderOrder so it draws under the model. One draw call, no shadow-map cost.
+ */
+export function makeContactShadow(): THREE.Mesh {
+  const S = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d')!;
+  // Offset the centre toward the sun-away side (+x/+z → +u/+v) by ~8% so the
+  // blob reads slightly directional rather than a perfect symmetric disc.
+  const cx = S * 0.58, cy = S * 0.58;
+  const grad = g.createRadialGradient(cx, cy, 0, cx, cy, S * 0.5);
+  grad.addColorStop(0.0, 'rgba(40,38,46,0.34)');
+  grad.addColorStop(0.6, 'rgba(40,38,46,0.18)');
+  grad.addColorStop(0.85, 'rgba(40,38,46,0.0)');
+  grad.addColorStop(1.0, 'rgba(40,38,46,0.0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, S, S);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(64, 46),  // elliptical: footprint + low-iso foreshortening
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }),
+  );
+  mesh.rotation.x = -Math.PI / 2;     // lie flat, face up
+  mesh.position.y = -0.90;            // just below the apron base course
+  mesh.renderOrder = -1;             // draw under the model
+  mesh.name = 'contactShadow';
+  return mesh;
 }

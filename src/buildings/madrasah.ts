@@ -332,8 +332,21 @@ export function madrasah(o: MadrasahOpts): THREE.Group {
     finial.position.y = turret.h + capR * 2.15;
     tg.add(finial);
 
-    tg.position.x = turret.offset;
+    // Drop to the plaza ground (turrets overhang the plinth at the facade ends) and
+    // give them a footing pad, mirroring the minaret fix — otherwise they float
+    // plinthH above the plaza and hang off the plinth edge.
+    tg.position.set(turret.offset, -plinthH, 0);
     raised.add(tg);
+
+    const tpadH = plinthH + 0.35;
+    const tpad = new THREE.Mesh(
+      new THREE.BoxGeometry(turret.r * 2.2, tpadH, turret.r * 2.2),
+      plinthMat,
+    );
+    tpad.position.set(turret.offset, -plinthH + tpadH / 2, 0);
+    tpad.castShadow = true;
+    tpad.receiveShadow = true;
+    raised.add(tpad);
   }
 
   g.add(raised);

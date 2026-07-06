@@ -13,18 +13,21 @@ import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
  * Runs on the LINEAR HDR buffer (after bloom, before OutputPass tone-maps to sRGB),
  * so the math stays in linear light and the ACES sky pre-warm is preserved.
  *
- *   - Warm tint: gently lifts red, trims blue → golden air.
- *   - Vignette: soft radial darkening for cinematic framing (corners only).
- *   - Subtle contrast S-curve around mid-grey → richer, less pastel, without crushing.
+ *   - Warm tint: lifts red, trims blue → golden air.
+ *   - Saturation: restores chroma ACES compresses out of highlights.
+ *   - Contrast S-curve + black-point around mid-grey → richer, less pastel.
+ *   - Vignette + bottom seat: darkens corners/base to ground the diorama.
+ *   - Hash dither: breaks 8-bit sky banding before output.
  *
  * Cheap: one fullscreen pass, a handful of ALU ops, no texture taps beyond the input.
  */
 const GoldenGradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
-    uTint: { value: new THREE.Color(1.04, 1.012, 0.966) }, // warm daylight grade → buff stone reads warm tan
-    uVignette: { value: 0.16 },   // light corner darkening (daytime — less cinematic vignette)
-    uContrast: { value: 0.05 },   // gentle S-curve amount
+    uTint: { value: new THREE.Color(1.075, 1.01, 0.93) }, // stronger warm grade → golden buff stone
+    uSaturation: { value: 1.16 }, // restore chroma ACES desaturates out of tile/dome
+    uVignette: { value: 0.30 },   // seat the floating diorama in darker corners
+    uContrast: { value: 0.12 },   // S-curve depth → less pastel, richer midtones
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -36,6 +39,7 @@ const GoldenGradeShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform vec3 uTint;
+    uniform float uSaturation;
     uniform float uVignette;
     uniform float uContrast;
     varying vec2 vUv;
@@ -46,13 +50,26 @@ const GoldenGradeShader = {
       // Warm color grade (linear space).
       c.rgb *= uTint;
 
+      // Saturation: restore chroma ACES compresses out of highlights (Rec709 luma).
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(l), c.rgb, uSaturation);
+
       // Gentle contrast S-curve around mid-grey — richer, not crushed.
       c.rgb = mix(c.rgb, c.rgb * c.rgb * (3.0 - 2.0 * c.rgb), uContrast);
 
-      // Soft vignette: smooth radial falloff from centre, corners only.
+      // Black-point: seat the shadow side without crushing midtones.
+      c.rgb = max(c.rgb - 0.012, 0.0) / (1.0 - 0.012);
+
+      // Soft vignette: smooth radial falloff from centre, tightened to seat corners.
       vec2 d = vUv - 0.5;
-      float v = smoothstep(0.78, 0.30, dot(d, d) * 2.2);
+      float v = smoothstep(0.70, 0.20, dot(d, d) * 2.2);
       c.rgb *= mix(1.0 - uVignette, 1.0, v);
+
+      // Faint asymmetric bottom darkening → grounds the diorama in heavier air.
+      c.rgb *= mix(0.93, 1.0, smoothstep(0.0, 0.35, vUv.y));
+
+      // Hash dither → breaks 8-bit banding on the smooth sky before output.
+      c.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
 
       gl_FragColor = c;
     }

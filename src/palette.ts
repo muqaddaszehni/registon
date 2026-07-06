@@ -1,17 +1,19 @@
 export const C = {
   // Stone — warm tan buff (the dominant brick colour in the Wikipedia photos)
-  sand: 0xe6d4ac, sandLight: 0xf1e6cc, sandDark: 0xccba90,
+  sand: 0xdec79a, sandLight: 0xeedcb8, sandDark: 0xbfa775,
   // Marble (pale grey-cream for plinths and steps — warm not stark white)
-  marble: 0xe8e3d6,
+  marble: 0xe6dcc6,
   // Plaza
-  plaza: 0xeee4d5, plazaPath: 0xd8cebb,
-  // Blues (lightened a touch so the dark-blue tilework reads bluer, less black)
-  cobalt: 0x2a6cb8, lapis: 0x214a82,
+  plaza: 0xeaddc4, plazaPath: 0xcfbf9f,
+  // Blues (lightened a touch so the dark-blue tilework reads bluer, less black;
+  // deepened toward the ref's dense lapis to anchor the palette)
+  cobalt: 0x2864ad, lapis: 0x1b3f73,
   // Greens
-  turquoise: 0x42c8c8, teal: 0x2fa8a8,
-  // Dome glazes — brighter/more cyan than the wall turquoise so the domes read as
-  // glazed, glowing focal points (accuracy spec §2). SD leans greener; TK is purest/brightest.
-  domeGlazeSD: 0x37c2bc, domeGlazeTK: 0x46d0cc,
+  turquoise: 0x3cc0c6, teal: 0x2ba4ac,
+  // Dome glazes — deep, slightly desaturated turquoise that leans BLUE (B>G), like
+  // aged glazed tile, not minty plastic. Still reads as the glowing focal point but
+  // the new value range lets the raking key model the bulb instead of self-glow.
+  domeGlazeSD: 0x1f9ca8, domeGlazeTK: 0x23a6b4,
   // Accents
   cream: 0xfff6e3, gold: 0xd9b545,
   // Ambience

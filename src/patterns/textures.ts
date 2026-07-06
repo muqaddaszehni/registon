@@ -584,7 +584,7 @@ export function archPanel(w: number, h: number): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-  t.anisotropy = 8;
+  t.anisotropy = 16; // thin kufic verticals minify on wing fronts — reduce crawl
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.magFilter = THREE.LinearFilter;
   textureRegistry.addTexture(cv, t);
@@ -647,10 +647,12 @@ export function pylonFace(bg: number, line: number, motif: number, border: numbe
     g.rect(innerPad, innerPad, S - innerPad * 2, S - innerPad * 2);
     g.clip();
 
-    const cellSize = Math.round(S * 0.150); // 154/1024 ≈ 0.150
-    const lineW = Math.max(2, Math.round(S * 0.0068)); // 7/1024 ≈ 0.0068
+    const cellSize = Math.round(S * 0.105); // ~9-10 stars across — denser, interlocked
+    const lineW = Math.max(2, Math.round(S * 0.009)); // thicker continuous interlace
 
-    g.strokeStyle = px(line);
+    // High-contrast cream net so the diagonals read as continuous straps tying
+    // the stars together, not faint guide lines on bare cobalt.
+    g.strokeStyle = '#fff6e3';
     g.lineWidth = lineW;
     g.lineCap = 'square';
 
@@ -967,6 +969,35 @@ function glazeSheen(g: CanvasRenderingContext2D, x: number, y: number, w: number
 }
 
 /**
+ * Bake a contact-AO gradient onto the top + bottom edges of a NON-repeating
+ * (clamped / 1:1) canvas: a dark band directly under the projecting cornice lip
+ * (top) and a fainter shadow where the wall meets the ground (bottom). Maps 1:1
+ * to the wall at zero runtime cost — no uv2 / aoMap / extra draw calls.
+ */
+function bakeContactAO(
+  g: CanvasRenderingContext2D, w: number, h: number,
+  topFrac = 0.12, topA = 0.32, botFrac = 0.07, botA = 0.22,
+): void {
+  g.save();
+  g.globalCompositeOperation = 'multiply';
+  if (topFrac > 0) {
+    const tg = g.createLinearGradient(0, 0, 0, h * topFrac);
+    tg.addColorStop(0, `rgba(20,14,6,${topA})`);
+    tg.addColorStop(1, 'rgba(20,14,6,0)');
+    g.fillStyle = tg;
+    g.fillRect(0, 0, w, h * topFrac);
+  }
+  if (botFrac > 0) {
+    const bgr = g.createLinearGradient(0, h * (1 - botFrac), 0, h);
+    bgr.addColorStop(0, 'rgba(20,14,6,0)');
+    bgr.addColorStop(1, `rgba(20,14,6,${botA})`);
+    g.fillStyle = bgr;
+    g.fillRect(0, h * (1 - botFrac), w, h * botFrac);
+  }
+  g.restore();
+}
+
+/**
  * Girih strapwork lattice: real interlaced strap ribbons forming 8-point star
  * rosettes with continuous outlined strap lines, connecting polygons between
  * stars (the authentic Islamic geometric strapwork/zelli pattern).
@@ -1116,15 +1147,36 @@ function drawKuficBandCtx(
   g.fillStyle = px(REF_WHITE);
   g.fillRect(x + h * 0.2, y + h * 0.82, w - h * 0.4, Math.max(2, h * 0.030));
 
-  // Glyph strokes
+  // Glyph strokes — grouped into "words" with cursive sub-baseline ligatures so
+  // the band flows like thuluth instead of reading as an even comb / barcode.
   const rnd = lcg(seed);
-  const bw = h * 0.145;
+  const bw = h * 0.155;                 // base glyph width (thickened vs comb)
+  const baseY = y + h * 0.82;           // kufic baseline
   let gx = x + h * 0.38;
+  let wordH = 0.30 + rnd() * 0.62;      // per-word base height fraction (reseeded)
+  let prevGx = -1, prevGw = 0, newWord = true;
+  g.lineCap = 'round';
   while (gx < x + w - h * 0.38) {
     const wMult = rnd() > 0.6 ? 1.55 : (rnd() > 0.4 ? 1.0 : 0.72);
     const gw = bw * wMult;
-    const tall = h * (0.40 + rnd() * 0.36);
-    const gy = y + h * 0.82 - tall;
+    // ~25% short stubs; the rest cluster around the per-word base height
+    const tall = rnd() < 0.25
+      ? h * 0.28
+      : h * Math.min(0.92, Math.max(0.30, wordH + (rnd() - 0.5) * 0.18));
+    const gy = baseY - tall;
+
+    // Curved sub-baseline ligature swash linking to the previous glyph in the
+    // same word (skipped across word breaks) — the flowing cursive read.
+    if (!newWord && prevGx >= 0) {
+      const x0 = prevGx + prevGw * 0.5, x1 = gx + gw * 0.5;
+      const dip = h * (0.05 + rnd() * 0.04);
+      g.strokeStyle = px(REF_WHITE);
+      g.lineWidth = Math.max(2, h * (0.028 + rnd() * 0.020));
+      g.beginPath();
+      g.moveTo(x0, baseY + h * 0.012);
+      g.quadraticCurveTo((x0 + x1) / 2, baseY + dip, x1, baseY + h * 0.006);
+      g.stroke();
+    }
 
     g.fillStyle = px(REF_WHITE);
     g.fillRect(gx, gy, gw, tall);
@@ -1150,10 +1202,19 @@ function drawKuficBandCtx(
     // Serif foot
     if (rnd() > 0.38) {
       const sfW = gw * 1.38;
-      g.fillRect(gx - (sfW - gw) / 2, y + h * 0.82, sfW, h * 0.030);
+      g.fillRect(gx - (sfW - gw) / 2, baseY, sfW, h * 0.030);
     }
 
-    gx += gw + h * (0.08 + rnd() * 0.18);
+    prevGx = gx; prevGw = gw;
+    // Advance: ~20% chance of a wide inter-word gap + reseed the word height
+    if (rnd() > 0.80) {
+      gx += gw + h * 0.55;
+      wordH = 0.30 + rnd() * 0.62;
+      newWord = true;
+    } else {
+      gx += gw + h * (0.10 + rnd() * 0.18);
+      newWord = false;
+    }
   }
   g.restore();
 }
@@ -1208,19 +1269,26 @@ function drawSqKufic(
   g.fillStyle = bg; g.fillRect(x, y, w, h);
   const rows = SQ_KUFIC_PAT.length, cols = 13;
   const cell = Math.max(4, Math.min(w, h) / 14);
-  for (let ty = 0; ty * cell * rows < h + cell * rows; ty++) {
+  // Three glaze tones picked per-CELL (not per-block) so each block carries a mix
+  const tones = [fg, accent, '#3f7fd0', fg, accent];
+  for (let ty = -1; ty * cell * rows < h + cell * rows; ty++) {
     for (let tx = 0; tx * cell * cols < w + cell * cols; tx++) {
-      const col = (tx + ty) % 2 ? fg : accent;
+      // Offset alternate block columns by half a block so the maze interlocks
+      const yShift = (tx % 2) ? cell * rows * 0.5 : 0;
       for (let j = 0; j < rows; j++) {
         for (let i = 0; i < cols; i++) {
           if (SQ_KUFIC_PAT[j][i] !== '#') continue;
-          g.fillStyle = col;
-          g.fillRect(x + tx * cell * cols + i * cell, y + ty * cell * rows + j * cell,
+          g.fillStyle = tones[(i * 3 + j * 7 + tx + ty + 10) % 5];
+          g.fillRect(x + tx * cell * cols + i * cell, y + ty * cell * rows + j * cell + yShift,
             cell * 0.92, cell * 0.92);
         }
       }
     }
   }
+  // Thin gold rule framing the strip
+  g.strokeStyle = px(C_GOLD);
+  g.lineWidth = Math.max(1, Math.min(w, h) * 0.012);
+  g.strokeRect(x + 1, y + 1, w - 2, h - 2);
   g.restore();
 }
 
@@ -1348,6 +1416,9 @@ export function arcadeFacade(wingLenM: number, wingHM: number, goldTrim = false)
         drawGirihBandCtx(g, bx - bayW * 0.045, top + storyH * 0.02, bayW * 0.09, storyH * 0.96, true);
       }
     }
+
+    // Baked contact AO: under-cornice shadow at the parapet + ground AO at the foot
+    bakeContactAO(g, w, h);
   }
 
   const [cv, g] = canvas(W, H, REF_SAND, draw, true);
@@ -1400,9 +1471,9 @@ export function brickWall(bg: number, line: number, motif: number): THREE.Canvas
     // ── Continuous glazed-brick DIAMOND-DIAPER NET (Sher-Dor side-wall look) ──
     // A diagonal lattice of glazed ribbons forms interlocking lozenges over the
     // buff field; the buff shows through each lozenge interior → ~30% blue.
-    const cellSize = Math.round(S * 0.125);   // 8 lozenges across the tile
+    const cellSize = Math.round(S * 0.072);   // ~14 lozenges — matches ref scale
     const halfCell = cellSize / 2;
-    const ribW = Math.max(3, Math.round(S * 0.011)); // glazed ribbon width
+    const ribW = Math.max(3, Math.round(S * 0.013)); // glazed ribbon width
     const rnd2 = lcg(57);
 
     // Glazed ribbons — drawn as short glazed-brick segments so coursing shows
@@ -1421,18 +1492,41 @@ export function brickWall(bg: number, line: number, motif: number): THREE.Canvas
       }
     }
 
-    // Filled accent diamonds at the lattice nodes — motif (cobalt) majority,
-    // a minority brightened to turquoise-hi; buff interiors keep the economy.
-    const ms = Math.round(cellSize * 0.30);
+    // Dark mortar seam down every glazed ribbon → crisp joint, higher contrast
+    g.strokeStyle = 'rgba(12,24,55,0.30)';
+    g.lineWidth = Math.max(1, ribW * 0.4);
+    for (let fam = 0; fam < 2; fam++) {
+      for (let i = -cnt; i < cnt * 2; i++) {
+        const off = i * cellSize;
+        g.beginPath();
+        if (fam === 0) { g.moveTo(off - S, -S); g.lineTo(off + S * 2, S * 2); }
+        else           { g.moveTo(off + S, -S); g.lineTo(off - S, S * 2); }
+        g.stroke();
+      }
+    }
+
+    // Glazed lozenge at EVERY lattice node. Even nodes carry a full glazed
+    // diamond (cobalt majority, sparse turquoise highlights); odd nodes keep the
+    // 70/30 economy as a buff lozenge marked only by a small turquoise pip.
+    const ms = Math.round(cellSize * 0.34);
     for (let iy = -2; iy < Math.ceil(S / halfCell) + 2; iy++) {
       for (let ix = -2; ix < Math.ceil(S / halfCell) + 2; ix++) {
         const cx2 = (ix + iy) * halfCell;
         const cy2 = (iy - ix) * halfCell;
         if (cx2 < -cellSize || cx2 > S + cellSize || cy2 < -cellSize || cy2 > S + cellSize) continue;
 
-        // Only ~half the nodes carry a filled diamond → holds the 70/30 economy
-        if ((ix + iy) % 2 !== 0) continue;
         const tone = rnd2();
+        if ((ix + iy) % 2 !== 0) {
+          // Buff lozenge node — just a small turquoise pip keeps it from reading empty
+          const pip = ms * 0.5;
+          g.save();
+          g.translate(cx2, cy2); g.rotate(Math.PI / 4);
+          g.fillStyle = tone > 0.5 ? px(REF_TURQUOISE) : '#5fe0e0';
+          g.fillRect(-pip * 0.5, -pip * 0.5, pip, pip);
+          g.restore();
+          continue;
+        }
+
         const bright = (ix * 5 + iy * 3) % 7 === 0; // sparse turquoise highlights
         const outerCol = bright ? '#5fe0e0' : px(motif);
 
@@ -1489,11 +1583,16 @@ export function drumBand(): THREE.CanvasTexture {
     g.fillRect(0, h * 0.77, w, h * 0.03);
     // Grand kufic inscription in the middle 56%
     drawKuficBandCtx(g, 0, h * 0.22, w, h * 0.56, 3, false);
+
+    // Baked contact AO: dome/gallery overhang at the drum top + roof line at base
+    bakeContactAO(g, w, h, 0.12, 0.32, 0.07, 0.22);
   }
 
   const [cv, g] = canvas(W, H, REF_TURQUOISE, draw, true);
   draw(g, W, H);
-  return toTexture(cv, 3, 1); // repeat 3× around drum circumference
+  const t = toTexture(cv, 3, 1); // repeat 3× around drum circumference
+  t.anisotropy = 16;             // thin kufic verticals minify on the 28-gon drum
+  return t;
 }
 
 /**
@@ -1508,6 +1607,7 @@ export function minaretShaft(): THREE.CanvasTexture {
 
     // Spiral banna'i: offset every other row by half-step to read as spiral
     const gsize = Math.round(w * 0.109); // ~56/512
+    const rndM = lcg(71);
     for (let j = 0; j < h / gsize; j++) {
       for (let i = 0; i < w / gsize; i++) {
         if ((i + j) % 2 === 0) continue;
@@ -1516,10 +1616,29 @@ export function minaretShaft(): THREE.CanvasTexture {
         const cx2 = (i + 0.5) * gsize + spiralShift;
         const cy2 = (j + 0.5) * gsize;
         const s2 = gsize * 0.27;
+        const tj = rndM();
         g.save();
         g.translate(cx2, cy2); g.rotate(Math.PI / 4);
-        g.fillStyle = px(REF_COBALT); g.fillRect(-s2, -s2, s2 * 2, s2 * 2);
-        g.fillStyle = px(REF_TURQUOISE); g.fillRect(-s2 * 0.4, -s2 * 0.4, s2 * 0.8, s2 * 0.8);
+        // Per-tile tonal jitter so the glaze varies (hand-set banna'i, not wallpaper)
+        g.fillStyle = tj > 0.7 ? mixHex(REF_COBALT, 0x0e2c5a, 0.5)
+                    : tj < 0.2 ? mixHex(REF_COBALT, 0x2f6fc0, 0.4)
+                    : px(REF_COBALT);
+        g.fillRect(-s2, -s2, s2 * 2, s2 * 2);
+        // Crisp dark mortar joint
+        g.strokeStyle = 'rgba(12,24,55,0.35)';
+        g.lineWidth = Math.max(1, s2 * 0.12);
+        g.strokeRect(-s2, -s2, s2 * 2, s2 * 2);
+        // Inner turquoise glaze (occasionally brightened)
+        g.fillStyle = tj > 0.8 ? mixHex(REF_TURQUOISE, 0x5fe0e0, 0.6) : px(REF_TURQUOISE);
+        g.fillRect(-s2 * 0.4, -s2 * 0.4, s2 * 0.8, s2 * 0.8);
+        // Thin top specular highlight across the upper ~18%
+        g.fillStyle = 'rgba(255,255,255,0.16)';
+        g.fillRect(-s2, -s2, s2 * 2, s2 * 0.36);
+        // Rare gold pip (~1 in 12 tiles)
+        if (rndM() > 0.917) {
+          g.fillStyle = px(REF_GOLD);
+          g.fillRect(-s2 * 0.14, -s2 * 0.14, s2 * 0.28, s2 * 0.28);
+        }
         g.restore();
       }
     }
@@ -1775,15 +1894,35 @@ function portalDrawKuficBand(
   ctx.fillStyle = px(C_WHITE);
   ctx.fillRect(x + h * 0.2, y + h * 0.82, w - h * 0.4, Math.max(2, h * 0.032));
 
-  // Glyph strokes with varied weights
+  // Glyph strokes — grouped into "words" with cursive sub-baseline ligatures so
+  // the band flows like thuluth instead of reading as an even comb / barcode.
   const rnd = makeLcg(seed);
-  const bw = h * 0.145; // base glyph width
+  const bw = h * 0.155; // base glyph width (thickened vs comb)
+  const baseY = y + h * 0.82;
   let gx = x + h * 0.38;
+  let wordH = 0.30 + rnd() * 0.62;
+  let prevGx = -1, prevGw = 0, newWord = true;
+  ctx.lineCap = 'round';
   while (gx < x + w - h * 0.38) {
     const wMult = rnd() > 0.6 ? 1.6 : (rnd() > 0.4 ? 1.0 : 0.7); // varied weight
     const gw = bw * wMult;
-    const tall = h * (0.38 + rnd() * 0.38);
-    const gy = y + h * 0.82 - tall;
+    // ~25% short stubs; the rest cluster around the per-word base height
+    const tall = rnd() < 0.25
+      ? h * 0.28
+      : h * Math.min(0.92, Math.max(0.30, wordH + (rnd() - 0.5) * 0.18));
+    const gy = baseY - tall;
+
+    // Cursive sub-baseline ligature swash to the previous glyph in the word
+    if (!newWord && prevGx >= 0) {
+      const x0 = prevGx + prevGw * 0.5, x1 = gx + gw * 0.5;
+      const dip = h * (0.05 + rnd() * 0.04);
+      ctx.strokeStyle = px(C_WHITE);
+      ctx.lineWidth = Math.max(2, h * (0.028 + rnd() * 0.020));
+      ctx.beginPath();
+      ctx.moveTo(x0, baseY + h * 0.012);
+      ctx.quadraticCurveTo((x0 + x1) / 2, baseY + dip, x1, baseY + h * 0.006);
+      ctx.stroke();
+    }
 
     // Main vertical stroke
     ctx.fillStyle = px(C_WHITE);
@@ -1814,10 +1953,19 @@ function portalDrawKuficBand(
     // Serif foot at baseline
     if (rnd() > 0.35) {
       const sfW = gw * 1.4, sfH = h * 0.032;
-      ctx.fillRect(gx - (sfW - gw) / 2, y + h * 0.82, sfW, sfH);
+      ctx.fillRect(gx - (sfW - gw) / 2, baseY, sfW, sfH);
     }
 
-    gx += gw + h * (0.08 + rnd() * 0.18);
+    prevGx = gx; prevGw = gw;
+    // Advance: ~20% chance of a wide inter-word gap + reseed the word height
+    if (rnd() > 0.80) {
+      gx += gw + h * 0.55;
+      wordH = 0.30 + rnd() * 0.62;
+      newWord = true;
+    } else {
+      gx += gw + h * (0.10 + rnd() * 0.18);
+      newWord = false;
+    }
   }
   ctx.restore();
 }
@@ -1869,18 +2017,25 @@ function portalDrawSquareKufic(
   ctx.fillStyle = bg; ctx.fillRect(x, y, w, h);
   const rows = SQ_KUFIC.length, cols = 13;
   const cell = Math.max(4, Math.min(w, h) / 14);
-  for (let ty = 0; ty * cell * rows < h + cell * rows; ty++) {
+  // Three glaze tones picked per-CELL (not per-block) so each block carries a mix
+  const tones = [fg, accent, '#3f7fd0', fg, accent];
+  for (let ty = -1; ty * cell * rows < h + cell * rows; ty++) {
     for (let tx = 0; tx * cell * cols < w + cell * cols; tx++) {
-      const col = (tx + ty) % 2 ? fg : accent;
+      // Offset alternate block columns by half a block so the maze interlocks
+      const yShift = (tx % 2) ? cell * rows * 0.5 : 0;
       for (let j = 0; j < rows; j++) {
         for (let i = 0; i < cols; i++) {
           if (SQ_KUFIC[j][i] !== '#') continue;
-          ctx.fillStyle = col;
-          ctx.fillRect(x + tx * cell * cols + i * cell, y + ty * cell * rows + j * cell, cell * 0.92, cell * 0.92);
+          ctx.fillStyle = tones[(i * 3 + j * 7 + tx + ty + 10) % 5];
+          ctx.fillRect(x + tx * cell * cols + i * cell, y + ty * cell * rows + j * cell + yShift, cell * 0.92, cell * 0.92);
         }
       }
     }
   }
+  // Thin gold rule framing the strip
+  ctx.strokeStyle = px(C_GOLD);
+  ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.012);
+  ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
   ctx.restore();
 }
 
@@ -1957,9 +2112,10 @@ function portalDrawTiger(
   ctx.beginPath(); ctx.moveTo(28, -18); ctx.lineTo(34, -28); ctx.stroke();
   ctx.restore();
 
-  // human-faced sun
+  // human-faced sun (enlarged ~1.4× with its radiating gold ray ring)
   ctx.save();
   ctx.translate(-18, -52);
+  ctx.scale(1.4, 1.4);
   ctx.fillStyle = px(C_GOLD);
   for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2;
@@ -1998,12 +2154,12 @@ function portalDrawTiger(
   ctx.beginPath(); ctx.moveTo(52, -24); ctx.lineTo(57, -34); ctx.lineTo(63, -24); ctx.closePath(); ctx.fill();
   ctx.fillStyle = px(C_STRIPE);
   ctx.beginPath(); ctx.arc(63, -14, 2.6, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = px(C_STRIPE); ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.strokeStyle = px(C_STRIPE); ctx.lineWidth = 5.5; ctx.lineCap = 'round';
   for (let i = -4; i <= 4; i++) {
     const sx = i * 11;
     ctx.beginPath();
-    ctx.moveTo(sx, -20 + Math.abs(i));
-    ctx.quadraticCurveTo(sx - 4, 0, sx, 16 - Math.abs(i));
+    ctx.moveTo(sx, -22 + Math.abs(i));
+    ctx.quadraticCurveTo(sx - 4, 0, sx, 18 - Math.abs(i));
     ctx.stroke();
   }
   ctx.fillStyle = 'rgba(255,246,227,0.85)';
@@ -2016,14 +2172,16 @@ function drawTigerTympanum(
 ) {
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = '#caa45c'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#b98f44'; ctx.fillRect(x, y, w, h); // warmer gilded ground
   const rnd = makeLcg(31);
-  for (let i = 0; i < 60; i++) {
+  // Dense vine-scroll / arabesque (gold + turquoise curls) so no flat ground shows
+  for (let i = 0; i < 120; i++) {
     const fx = x + rnd() * w, fy = y + rnd() * h;
-    ctx.strokeStyle = 'rgba(30,95,168,0.5)';
+    const gold = rnd() > 0.5;
+    ctx.strokeStyle = gold ? 'rgba(217,181,69,0.55)' : 'rgba(30,95,168,0.5)';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(fx, fy, 7 + rnd() * 8, rnd() * 6, rnd() * 6 + 2.2); ctx.stroke();
-    ctx.fillStyle = rnd() > 0.5 ? px(C_TURQUOISE) : px(C_COBALT);
+    ctx.beginPath(); ctx.arc(fx, fy, 6 + rnd() * 9, rnd() * 6, rnd() * 6 + 2.2); ctx.stroke();
+    ctx.fillStyle = rnd() > 0.5 ? px(C_TURQUOISE) : (gold ? px(C_GOLD) : px(C_COBALT));
     ctx.beginPath(); ctx.arc(fx, fy, 2.6, 0, Math.PI * 2); ctx.fill();
   }
   const sc = h / 280;
@@ -2046,18 +2204,55 @@ function drawGoldTympanum(
     const fx = x + rnd() * w, fy = y + rnd() * h, r = 10 + rnd() * 22;
     ctx.beginPath(); ctx.arc(fx, fy, r, rnd() * 6, rnd() * 6 + 3.5); ctx.stroke();
   }
-  const rosette = (cx: number, cy: number, R: number) => {
-    ctx.fillStyle = px(C_GOLD);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
+  const rosette = (cx: number, cy: number, R0: number) => {
+    const R = R0 * 1.2;            // ~20% larger for tilyakori richness
+    const petals = 10;            // ~20% more petals
+    const contour = 'rgba(18,30,60,0.55)';
+    // Thin gold filament rays between petals (drawn first, behind the petals)
+    ctx.strokeStyle = px(C_GOLD);
+    ctx.lineWidth = Math.max(1, R * 0.03);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < petals; i++) {
+      const a = (i / petals) * Math.PI * 2 + Math.PI / petals;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a) * R * 1.05, cy + Math.sin(a) * R * 1.05);
+      ctx.stroke();
+    }
+    // Outer petal ring with a dark contour stroke for depth
+    for (let i = 0; i < petals; i++) {
+      const a = (i / petals) * Math.PI * 2;
+      ctx.fillStyle = px(C_GOLD);
       ctx.beginPath();
       ctx.ellipse(cx + Math.cos(a) * R * 0.6, cy + Math.sin(a) * R * 0.6, R * 0.34, R * 0.18, a, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = contour;
+      ctx.lineWidth = Math.max(1, R * 0.04);
+      ctx.stroke();
     }
+    // Second, smaller petal ring rotated half a step → layered fullness
+    const Ri = R * 0.62;
+    for (let i = 0; i < petals; i++) {
+      const a = (i / petals) * Math.PI * 2 + Math.PI / petals;
+      ctx.fillStyle = px(C_GOLD);
+      ctx.beginPath();
+      ctx.ellipse(cx + Math.cos(a) * Ri * 0.6, cy + Math.sin(a) * Ri * 0.6, Ri * 0.34, Ri * 0.18, a, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = contour;
+      ctx.lineWidth = Math.max(1, Ri * 0.04);
+      ctx.stroke();
+    }
+    // Turquoise boss with a dark contour ring
     ctx.fillStyle = px(C_TURQUOISE_HI);
     ctx.beginPath(); ctx.arc(cx, cy, R * 0.30, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = contour;
+    ctx.lineWidth = Math.max(1, R * 0.03);
+    ctx.stroke();
+    // Gold centre + offset white specular pip (jewelled look)
     ctx.fillStyle = px(C_GOLD);
     ctx.beginPath(); ctx.arc(cx, cy, R * 0.13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.arc(cx - R * 0.10, cy - R * 0.10, R * 0.05, 0, Math.PI * 2); ctx.fill();
   };
   rosette(x + w * 0.5,  y + h * 0.42, h * 0.34);
   rosette(x + w * 0.18, y + h * 0.6,  h * 0.2);
@@ -2128,6 +2323,9 @@ export function portalTexture(variant: PortalVariant, wM: number, hM: number): T
     // dark arch opening (painted as backup; real hole cut by geometry)
     portalArchPath(ctx, w / 2, h, aw, springY, apexY);
     ctx.fillStyle = px(C_NIGHT); ctx.fill();
+
+    // Baked contact AO: under-cornice shadow at top + ground AO at the pylon feet
+    bakeContactAO(ctx, w, h);
   }
 
   const [cv, g] = canvas(W, H, C_COBALT, draw, true);
@@ -2171,6 +2369,9 @@ export function iwanTexture(variant: PortalVariant): THREE.CanvasTexture {
       ctx.strokeRect(dx + dw * 0.08, h * (0.74 + j * 0.062), dw * 0.34, h * 0.05);
       ctx.strokeRect(dx + dw * 0.58, h * (0.74 + j * 0.062), dw * 0.34, h * 0.05);
     }
+
+    // Baked contact AO: under-cornice shadow at top + ground AO at the foot
+    bakeContactAO(ctx, w, h);
   }
 
   const [cv, g] = canvas(W, H, C_COBALT_DARK, draw, true);

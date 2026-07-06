@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { makeSky } from './scene/sky';
 import { makeCamera, sizeCamera } from './scene/camera';
 import { addSunsetLights } from './scene/lights';
-import { makeGround, makeApron } from './scene/ground';
+import { makeGround, makeApron, makeContactShadow } from './scene/ground';
 import { Orbit } from './scene/orbit';
 import { ZoomController } from './scene/zoom';
 import { PanController } from './scene/pan';
@@ -25,6 +25,7 @@ import { Cards } from './ui/cards';
 import { addTrees } from './ambience/trees';
 import { addDoves } from './ambience/doves';
 import { addGardens } from './ambience/gardens';
+import { addFountains } from './ambience/fountains';
 import { addMotes } from './scene/motes';
 
 const app = document.getElementById('app')!;
@@ -32,9 +33,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2.0));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; // softer shadow edges (raked low-sun key)
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0; // brighter clear-day exposure (was dim golden-hour 0.92)
+renderer.toneMappingExposure = 1.05; // lift to compensate the reduced hemi/fill flood (AAA lighting pass)
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -44,6 +45,7 @@ const camera = makeCamera();
 addSunsetLights(scene);
 const ground = makeGround(); scene.add(ground);
 const apron = makeApron(); scene.add(apron);
+const contactShadow = makeContactShadow(); scene.add(contactShadow);
 
 const composer = makeComposer(renderer, scene, camera);
 
@@ -152,8 +154,9 @@ hero.onArrive = () => {
   if (id) cards.show(id); else cards.hide();
 };
 
-onTick(addTrees(scene));
+onTick(addTrees(scene, grid));
 addGardens(scene);
+addFountains(scene);
 onTick(addDoves(scene, grid, () => hero.worldPos));
 onTick(addMotes(scene));
 

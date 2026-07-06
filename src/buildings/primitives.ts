@@ -3,9 +3,20 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { C } from '../palette';
 import { archPanel, portalTexture, iwanTexture, ropeTexture, brickWall, drumBand, minaretShaft, girihTile, arcadeFacade, calligraphyBand, type PortalVariant } from '../patterns/textures';
 import { textureRegistry } from '../scene/lod';
+import { lanternRow, type LanternSite } from './lanterns';
 
 export const mat = (color: number) => new THREE.MeshLambertMaterial({ color, flatShading: true });
 const matMap = (map: THREE.Texture) => new THREE.MeshLambertMaterial({ map });
+
+// Shared polished-brass material for finials/crescents/column tips — Phong specular
+// reads as a hot glint that UnrealBloom catches as a sparkle.
+const goldShiny = new THREE.MeshPhongMaterial({
+  color: C.gold,
+  specular: 0xe6d6b4,
+  shininess: 58,
+  emissive: new THREE.Color(C.gold),
+  emissiveIntensity: 0.06,
+});
 
 export function shadowed<T extends THREE.Object3D>(o: T): T {
   o.traverse(c => { if (c instanceof THREE.Mesh) { c.castShadow = true; c.receiveShadow = true; } });
@@ -72,7 +83,20 @@ export function patternedBoxMulti(
     const [fw, fh] = faceDims[key];
     return faceTexRepeat(tex, fw, fh);
   });
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats);
+  const geo = new THREE.BoxGeometry(w, h, d);
+  // Cheap baked contact-AO: darken the base vertex ring (and slightly the top), which
+  // the side faces interpolate into a vertical gradient — grounds the big tiled wing
+  // masses and darkens the wall/plinth and wall/cornice junctions. Zero extra geometry.
+  const pos = geo.getAttribute('position');
+  const colArr = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const v = y < -h / 2 * 0.98 ? 0.62 : (y > h / 2 * 0.98 ? 0.84 : 1.0);
+    colArr[i * 3] = v; colArr[i * 3 + 1] = v; colArr[i * 3 + 2] = v;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+  mats.forEach(mm => { (mm as THREE.MeshLambertMaterial).vertexColors = true; });
+  const m = new THREE.Mesh(geo, mats);
   m.position.y = h / 2;
   return m;
 }
@@ -180,7 +204,7 @@ export function pishtaq(
     emissive: new THREE.Color(C.turquoise),
     emissiveIntensity: 0.14,
   });
-  const tipMat = new THREE.MeshLambertMaterial({ color: C.gold });
+  const tipMat = goldShiny;
 
   for (const sgn of [-1, 1] as const) {
     // Shaft (tapered cylinder)
@@ -220,7 +244,7 @@ export function pishtaq(
   // DoubleSide ensures the inner face renders regardless of camera orientation.
   const sideWallH = apex + 0.4;
   const sideRevealMat = new THREE.MeshLambertMaterial({
-    color: C.sand,
+    color: C.sandDark,   // grade the reveal into shadow so the recess reads deep
     side: THREE.DoubleSide,
   });
   for (const sgn of [-1, 1] as const) {
@@ -237,7 +261,7 @@ export function pishtaq(
   // Beige sandstone ceiling — matches side reveals so the recess reads as one
   // continuous stone niche descending from vault to floor.
   const vaultMat = new THREE.MeshLambertMaterial({
-    color: C.sand,
+    color: C.sandDark,   // darker ceiling so the recess falls into shadow
     side: THREE.DoubleSide,
   });
   const vaultMesh = new THREE.Mesh(
@@ -248,44 +272,74 @@ export function pishtaq(
   vaultMesh.rotation.x = Math.PI / 2;
   g.add(vaultMesh);
 
-  // ── MUQARNAS HALF-DOME (stalactite vault in the arch crown) ──────
-  // A proper corbelled honeycomb filling the upper third of the iwan arch: rows of
-  // small nested cells that narrow toward the apex (following the pointed arch) and
-  // corbel FORWARD as they rise, with alternating lit/shadow cells so the cluster reads
-  // as intricate light-and-dark stalactite work rather than a flat grid of blocks.
-  // Sits against the iwan back wall, hanging from the apex down to the spring zone.
+  // ── IWAN HALF-DOME HOOD (semi-vault the muqarnas hangs from) ─────
+  // A dome-of-revolution at the back-top: its visible front half curves from the
+  // apex down to the spring line so the recess resolves into a curved hood (not a
+  // flat box), grading the shadow falloff. DoubleSide → the concave inside renders.
+  const hoodR = aw / 2 + 0.15;
+  const hoodH = (apex - spring) * 0.95;
+  const hoodPts: THREE.Vector2[] = [];
+  const HN = 10;
+  for (let i = 0; i <= HN; i++) {
+    const t = i / HN;   // 0 base(spring) → 1 apex
+    hoodPts.push(new THREE.Vector2(Math.cos(t * Math.PI / 2) * hoodR, Math.sin(t * Math.PI / 2) * hoodH));
+  }
+  const hoodMesh = new THREE.Mesh(
+    new THREE.LatheGeometry(hoodPts, 24),
+    new THREE.MeshLambertMaterial({ color: C.sandDark, side: THREE.DoubleSide }),
+  );
+  hoodMesh.position.set(0, spring, backZ + 0.3);
+  g.add(hoodMesh);
+
+  // ── MUQARNAS HALF-DOME (corbelled stalactite vault) ──────────────
+  // The 3D read comes from GEOMETRY, not a 2-tone checker: every cell soffit tilts
+  // down-and-forward so the directional key rakes across the fan as a real gradient;
+  // rows brick-stagger and corbel forward harder; the palette stays one warm family
+  // (lit soffit / deep warm pocket) with a sparse gold accent. Cells are binned by
+  // material and merged → ~3 draws instead of ~24.
   const muqApexY   = apex - (apex - spring) * 0.06;   // top of the cluster (near apex)
   const muqBaseY   = spring + (apex - spring) * 0.30; // bottom of the cluster
-  const muqBackZ   = backZ + 0.10;                    // hangs against the iwan back wall
-  const muqLit    = mat(C.sandLight);                 // forward-facing cell soffits (lit)
-  const muqShade  = mat(0x4a3318);                    // recessed cell pockets (shadow)
-  const ROWS = 5;
+  const muqBackZ   = backZ + (frontZ - backZ) * 0.22; // start nearer mid-iwan so it catches light
+  const muqLitGeos:    THREE.BufferGeometry[] = [];   // lit forward soffits
+  const muqPocketGeos: THREE.BufferGeometry[] = [];   // deep warm pockets
+  const muqAccentGeos: THREE.BufferGeometry[] = [];   // sparse gold accent cells
+  const _mm = new THREE.Matrix4();
+  const ROWS = 7;
   for (let row = 0; row < ROWS; row++) {
     const tg = row / (ROWS - 1);                       // 0 at bottom, 1 at top
-    // Cell band Y centre, packed bottom→top.
     const yC = muqBaseY + (muqApexY - muqBaseY) * tg;
     const rowH = (muqApexY - muqBaseY) / ROWS * 1.15;
-    // Width of this row narrows toward the apex (pointed-arch envelope).
     const env = Math.cos(tg * Math.PI * 0.42);         // 1 at base → ~0.7 at top
     const rowW = aw * 0.92 * env;
-    // Higher rows corbel forward (toward viewer, +Z) — the overhang.
-    const zC = muqBackZ + (frontZ - backZ) * 0.16 * tg;
-    const cells = Math.max(2, Math.round(7 * env));    // fewer cells near apex
+    const zC = muqBackZ + (frontZ - backZ) * 0.30 * tg; // corbel forward harder (was 0.16)
+    const cells = Math.max(2, Math.round(7 * env));
     const cellW = rowW / cells;
+    const stagger = (row % 2) ? cellW * 0.5 : 0;       // brick-nest alternate rows
     for (let ci = 0; ci < cells; ci++) {
-      const bx = -rowW / 2 + (ci + 0.5) * cellW;
-      // Alternate the cells' projection so adjacent cells differ in depth → shadow lattice.
+      const bx = -rowW / 2 + (ci + 0.5) * cellW + stagger;
+      if (bx + cellW / 2 > rowW / 2 + 0.01) continue;  // keep the stagger inside the envelope
       const fwd = (ci + row) % 2 === 0;
-      const cellD = fwd ? rowH * 0.9 : rowH * 0.5;
-      const cellMat = fwd ? muqLit : muqShade;
-      const cell = new THREE.Mesh(
-        new THREE.BoxGeometry(cellW * 0.86, rowH * 0.9, cellD),
-        cellMat,
-      );
-      cell.position.set(bx, yC, zC + cellD / 2);
-      g.add(cell);
+      const cellD = fwd ? rowH * 0.95 : rowH * 0.6;
+      const cellGeo = new THREE.BoxGeometry(cellW * 0.86, rowH * 0.9, cellD);
+      // Tilt the soffit down-and-forward, then position — light rakes the underside.
+      cellGeo.applyMatrix4(_mm.makeRotationX(-0.5));
+      cellGeo.applyMatrix4(_mm.makeTranslation(bx, yC, zC + cellD / 2));
+      const accent = (ci + row * 2) % 5 === 0;
+      (accent ? muqAccentGeos : fwd ? muqLitGeos : muqPocketGeos).push(cellGeo);
     }
   }
+  const muqLitMat    = new THREE.MeshLambertMaterial({ color: C.sandLight, emissive: new THREE.Color(C.sandLight), emissiveIntensity: 0.05 });
+  const muqPocketMat = mat(0x6e4f28);   // warm mid-dark pocket (not near-black)
+  const muqAccentMat = new THREE.MeshLambertMaterial({ color: C.gold, emissive: new THREE.Color(C.gold), emissiveIntensity: 0.10 });
+  const addMuq = (bin: THREE.BufferGeometry[], material: THREE.Material) => {
+    if (!bin.length) return;
+    const merged = mergeGeometries(bin, false);
+    bin.forEach(b => b.dispose());
+    if (merged) g.add(new THREE.Mesh(merged, material));
+  };
+  addMuq(muqLitGeos, muqLitMat);
+  addMuq(muqPocketGeos, muqPocketMat);
+  addMuq(muqAccentGeos, muqAccentMat);
 
   // ── MOLDED CORNICE (3-layer stepped crowning) ─────────────────────
   // Replaces the old single cap slab with a proper Timurid-style cornice:
@@ -414,12 +468,112 @@ export function pishtaq(
     new THREE.MeshLambertMaterial({
       map: iwanTex,
       emissive: new THREE.Color(C.lapis),
-      emissiveIntensity: 0.20,
+      emissiveIntensity: 0.10,   // keep a faint lapis breath, but let the recess drop into shadow
       side: THREE.DoubleSide,
     }),
   );
   backWall.position.set(0, (apex + 0.4) / 2, backZ + 0.07);
   g.add(backWall);
+
+  // ── PROUD PERIMETER FRAME + ARCHIVOLT (real relief, not a printed billboard) ──
+  // Converts the flat textured screen into a framed portal whose edges throw shadow.
+  const _fm = new THREE.Matrix4();
+  const goldEdgeMat = new THREE.MeshLambertMaterial({ color: C.gold });
+  const pushFrame = (bin: THREE.BufferGeometry[], bw: number, bh: number, bd: number, x: number, y: number, z: number) => {
+    const gg = new THREE.BoxGeometry(bw, bh, bd);
+    gg.applyMatrix4(_fm.makeTranslation(x, y, z));
+    bin.push(gg);
+  };
+  const buildArch = (p: THREE.Shape | THREE.Path, aW: number, sp: number, ap: number, y0: number) => {
+    p.moveTo(-aW / 2, y0);
+    p.lineTo(-aW / 2, sp);
+    p.bezierCurveTo(-aW / 2, sp + (ap - sp) * 0.55, -aW * 0.30, ap - (ap - sp) * 0.18, 0, ap);
+    p.bezierCurveTo(aW * 0.30, ap - (ap - sp) * 0.18, aW / 2, sp + (ap - sp) * 0.55, aW / 2, sp);
+    p.lineTo(aW / 2, y0);
+    p.closePath();
+  };
+
+  // (1) Outer cobalt perimeter frame — 4 thin boxes, proud of the bosses (frontZ+0.06)
+  const frameW = w * 0.10;
+  const frameZ2 = frontZ + 0.12;
+  const frameBins: THREE.BufferGeometry[] = [];
+  pushFrame(frameBins, w + frameW, frameW, 0.12, 0, h - frameW / 2, frameZ2);  // top
+  pushFrame(frameBins, w + frameW, frameW, 0.12, 0, frameW / 2, frameZ2);      // bottom
+  pushFrame(frameBins, frameW, h, 0.12, -(w / 2), h / 2, frameZ2);             // left
+  pushFrame(frameBins, frameW, h, 0.12,  (w / 2), h / 2, frameZ2);             // right
+  const frameMerged = mergeGeometries(frameBins, false);
+  frameBins.forEach(b => b.dispose());
+  if (frameMerged) g.add(new THREE.Mesh(frameMerged, new THREE.MeshLambertMaterial({ color: C.cobalt })));
+
+  // (2) Thin gold inner edge just inside the cobalt frame
+  const goldBins: THREE.BufferGeometry[] = [];
+  const gEdge = frameW * 0.25, gz = frontZ + 0.16;
+  const innerHalfW = w / 2 - frameW;
+  pushFrame(goldBins, innerHalfW * 2 + gEdge, gEdge, 0.10, 0, h - frameW - gEdge / 2, gz);  // top
+  pushFrame(goldBins, innerHalfW * 2 + gEdge, gEdge, 0.10, 0, frameW + gEdge / 2, gz);      // bottom
+  pushFrame(goldBins, gEdge, h - frameW * 2, 0.10, -innerHalfW, h / 2, gz);                 // left
+  pushFrame(goldBins, gEdge, h - frameW * 2, 0.10,  innerHalfW, h / 2, gz);                 // right
+  const goldMerged = mergeGeometries(goldBins, false);
+  goldBins.forEach(b => b.dispose());
+  if (goldMerged) g.add(new THREE.Mesh(goldMerged, goldEdgeMat));
+
+  // (3) Raised archivolt ring hugging the pointed arch (turquoise + thinner gold inside)
+  const ringW = w * 0.045;
+  const arShape = new THREE.Shape();
+  buildArch(arShape, aw + ringW * 2, spring, apex + ringW, spring - (apex - spring) * 0.5);
+  const arHole = new THREE.Path();
+  buildArch(arHole, aw, spring, apex, spring - (apex - spring) * 0.5);
+  arShape.holes.push(arHole);
+  const archRing = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(arShape, { depth: 0.12, bevelEnabled: false }),
+    new THREE.MeshLambertMaterial({ color: C.turquoise, emissive: new THREE.Color(C.turquoise), emissiveIntensity: 0.10 }),
+  );
+  archRing.position.set(0, 0, frontZ);   // extrudes +Z → front face proud at frontZ+0.12
+  g.add(archRing);
+  const grShape = new THREE.Shape();
+  buildArch(grShape, aw, spring, apex, spring - (apex - spring) * 0.5);
+  const grHole = new THREE.Path();
+  buildArch(grHole, aw - ringW * 0.7, spring, apex - ringW * 0.35, spring - (apex - spring) * 0.5);
+  grShape.holes.push(grHole);
+  const goldRing = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(grShape, { depth: 0.10, bevelEnabled: false }),
+    goldEdgeMat,
+  );
+  goldRing.position.set(0, 0, frontZ + 0.04);
+  g.add(goldRing);
+
+  // ── TYMPANUM TILE FRAME (the mosaic reads as inset tilework, not a hung poster) ──
+  // A proud gold+cobalt rope frame in front of the back-wall mosaic gives it real
+  // shadow edges so it reads as set-in tile. (Cheaper than swapping in a recessed
+  // tigerSpandrel sub-panel, which is variant-specific and lives in textures.ts.)
+  const tymW = aw + 0.4, tymH = apex + 0.4, tymCY = tymH / 2;
+  const tymFz = backZ + 0.22, tb = w * 0.05;
+  const tBins: THREE.BufferGeometry[] = [];
+  pushFrame(tBins, tymW + tb, tb, 0.10, 0, tymCY + tymH / 2, tymFz);  // top
+  pushFrame(tBins, tymW + tb, tb, 0.10, 0, tymCY - tymH / 2, tymFz);  // bottom
+  pushFrame(tBins, tb, tymH, 0.10, -tymW / 2, tymCY, tymFz);          // left
+  pushFrame(tBins, tb, tymH, 0.10,  tymW / 2, tymCY, tymFz);          // right
+  const tMerged = mergeGeometries(tBins, false);
+  tBins.forEach(b => b.dispose());
+  if (tMerged) g.add(new THREE.Mesh(tMerged, new THREE.MeshLambertMaterial({ color: C.cobalt })));
+  const tg2: THREE.BufferGeometry[] = [];
+  const tgi = tb * 0.3;
+  pushFrame(tg2, tymW, tgi, 0.08, 0, tymCY + tymH / 2 - tb * 0.5, tymFz + 0.04);
+  pushFrame(tg2, tymW, tgi, 0.08, 0, tymCY - tymH / 2 + tb * 0.5, tymFz + 0.04);
+  pushFrame(tg2, tgi, tymH - tb, 0.08, -tymW / 2 + tb * 0.5, tymCY, tymFz + 0.04);
+  pushFrame(tg2, tgi, tymH - tb, 0.08,  tymW / 2 - tb * 0.5, tymCY, tymFz + 0.04);
+  const tgMerged = mergeGeometries(tg2, false);
+  tg2.forEach(b => b.dispose());
+  if (tgMerged) g.add(new THREE.Mesh(tgMerged, goldEdgeMat));
+
+  // ── WARM IWAN FILL LIGHT (one per grand portal) ──────────────────
+  // Lifts the deep recess + muqarnas which the directional sun barely reaches.
+  // castShadow MUST stay false: the shadow map is frozen and a shadow-casting
+  // point light would break it. Distance-bounded → cheap on the Lambert materials.
+  const iwanLight = new THREE.PointLight(0xffb060, 8, iwanDepth * 2, 2);
+  iwanLight.position.set(0, spring, backZ + 1);
+  iwanLight.castShadow = false;
+  g.add(iwanLight);
 
   return g;
 }
@@ -440,14 +594,19 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
   // Glaze tones derived from the base color: a dark valley + bright ridge for the
   // ribbed stripe map, so each dome's fluting reads in its own hue.
   const glazeCol = new THREE.Color(glaze);
-  const valleyHex = '#' + glazeCol.clone().multiplyScalar(0.42).getHexString();
-  const ridgeHex  = '#' + glazeCol.clone().lerp(new THREE.Color(0xffffff), 0.32).getHexString();
+  // Saturated cobalt-teal valley (not muddy-dark) + a crisp, brighter-but-not-pastel ridge.
+  // Phong (finding 1) now supplies the sun-side glint, so the painted ridge stays restrained.
+  const valleyCol = glazeCol.clone().lerp(new THREE.Color(C.lapis), 0.30).multiplyScalar(0.55);
+  const valleyHex = '#' + valleyCol.getHexString();
+  const ridgeHex  = '#' + glazeCol.clone().lerp(new THREE.Color(0xffffff), 0.22).getHexString();
   const baseHex   = '#' + glazeCol.getHexString();
+  // Deep teal-blue belly for the smooth-cap vertical gradient.
+  const deepBellyHex = '#' + glazeCol.clone().lerp(new THREE.Color(C.lapis), 0.30).multiplyScalar(0.85).getHexString();
 
   // ── TALL INSCRIPTION DRUM ────────────────────────────────────────
   // Refs (every Registan dome) show a tall cylindrical drum carrying a grand
   // kufic inscription band, crowned by an arcaded gallery of small arched niches.
-  const drumH = r * 1.05;             // tall drum (was 0.75) — dominant vertical
+  const drumH = r * 1.45;             // tall inscription drum — the dominant vertical (de-balloons the bulb)
   const drumR  = r * DRUM_R_FACTOR;
   const drumTex = drumBand();
   drumTex.repeat.set(Math.max(2, Math.round(drumR * 2 * Math.PI / 3)), 1);
@@ -481,44 +640,21 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
   collar.position.y = collarY + collarH / 2;
   g.add(collar);
 
-  // ── LANTERN NICHE RING (collar-to-dome transition) ────────────────
-  // Ring of small rectangular niches around the drum top, just above the collar.
-  // Each niche is a cobalt box (surround) with a lighter recessed face.
-  // rotation.y = -a makes local +Z face radially outward.
-  const nicheCount    = ribbed ? 16 : 12;
-  const nicheBaseY    = collarY + collarH;     // y just above collar
-  const nicheRing     = drumR * 1.04;          // niche center radius (flush with collar top)
-  const nicheH        = r * 0.16;
-  const nicheArcW     = (Math.PI * 2 * nicheRing / nicheCount) * 0.72; // arc width
-  const nicheDepth    = r * 0.07;              // radial depth of niche box
-  const nichemat      = mat(C.cobalt);
-  const nicheLightMat = mat(C.sandLight);
-  for (let ni = 0; ni < nicheCount; ni++) {
-    const a = (ni / nicheCount) * Math.PI * 2;
-    const nx = Math.cos(a) * nicheRing;
-    const nz = Math.sin(a) * nicheRing;
-    // Cobalt niche surround — rotation.y = -a so +Z faces radially out
-    const surround = new THREE.Mesh(
-      new THREE.BoxGeometry(nicheArcW, nicheH, nicheDepth),
-      nichemat,
-    );
-    surround.position.set(nx, nicheBaseY + nicheH / 2, nz);
-    surround.rotation.y = -a;
-    g.add(surround);
-    // Light inner face (slightly recessed, smaller, sits on outer face center)
-    const inner = new THREE.Mesh(
-      new THREE.BoxGeometry(nicheArcW * 0.60, nicheH * 0.72, 0.06),
-      nicheLightMat,
-    );
-    // Place outer face at nicheRing + nicheDepth/2, then inner is at same Z but pulled in a bit
-    inner.position.set(
-      Math.cos(a) * (nicheRing + nicheDepth / 2 + 0.04),
-      nicheBaseY + nicheH * 0.4,
-      Math.sin(a) * (nicheRing + nicheDepth / 2 + 0.04),
-    );
-    inner.rotation.y = -a;
-    g.add(inner);
-  }
+  // ── LANTERN-NICHE BAND (continuous corbel) ────────────────────────
+  // ONE short cylinder carrying a blind-arch niche texture reads as a continuous
+  // corbel band, instead of ~24-32 loose niche cubes that looked like floating boxes
+  // (and cuts the draw calls / sub-pixel proud plates).
+  const nicheBaseY = collarY + collarH;        // y just above collar
+  const nicheH     = r * 0.16;
+  const nicheTex   = archPanel(512, 128);
+  nicheTex.wrapS = THREE.RepeatWrapping;
+  nicheTex.repeat.set(ribbed ? 16 : 12, 1);
+  const nicheBand = new THREE.Mesh(
+    new THREE.CylinderGeometry(drumR * 1.05, drumR * 1.05, nicheH, 28),
+    new THREE.MeshLambertMaterial({ map: nicheTex }),
+  );
+  nicheBand.position.y = nicheBaseY + nicheH / 2;
+  g.add(nicheBand);
 
   const capBase = collarY + collarH + nicheH * 0.6;  // dome sits slightly above lantern niches
 
@@ -527,17 +663,19 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
   // The bulb SPRINGS from the drum (base radius = drum top) and bulges only
   // modestly past it (belly ≈ 1.21× drum), then necks to a point — a tall onion,
   // NOT a wide canopy overhanging a thin stem (which read as a mushroom/umbrella).
-  const capH = r * 1.95;  // tall bulb: height ≈ belly diameter
+  const capH = r * 1.62;  // tightened bulb so it springs vertically from the tall drum
 
   const CTRL: [number, number][] = [
     [0.00, drumR * 1.03], // base: seats flush on the collar top (no skirt/ledge)
-    [0.12, r * 0.98],     // springs upward and slightly out from the drum
-    [0.30, r * 1.04],     // widest belly — modest swell, ~1.21× drum radius
+    [0.12, r * 0.90],     // springs upward, near-vertical off the drum
+    [0.30, r * 0.99],     // widest belly — barely exceeds the 0.86r drum (no overhang)
     [0.48, r * 0.94],     // gentle shoulder
     [0.64, r * 0.66],     // smooth neck
     [0.80, r * 0.38],     // taper toward apex
     [0.92, r * 0.15],     // rounded near-apex (non-tent)
-    [1.00, 0.0],          // apex point
+    [1.00, r * 0.02],     // tiny non-zero apex: avoids a degenerate vertex pole whose
+                          // garbage normals spike the glaze specular into an ACES magenta
+                          // flare. The gold finial above covers this 0.02r flat top.
   ];
 
   function profileRad(t: number): number {
@@ -582,16 +720,29 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
       sg.fillRect(cx - sw / 2, 0, sw, 256);
       // Lighter highlight on ridge peak (halfway between valleys)
       const px2 = ((i + 1.0) / LOBES) * 512;
-      const hw = sw * 0.45;
+      const hw = sw * 0.6;   // broader lit flute face (pairs with the Phong glint)
       sg.fillStyle = ridgeHex;
       sg.fillRect(px2 - hw / 2, 0, hw, 256);
     }
-    // Fade stripes out near top (apex) — top 20% of texture fades to solid base glaze
-    const fadeGrad = sg.createLinearGradient(0, 256 * 0.75, 0, 256);
-    fadeGrad.addColorStop(0, `rgba(${glazeCol.r*255|0},${glazeCol.g*255|0},${glazeCol.b*255|0},0)`);
-    fadeGrad.addColorStop(1, baseHex);
-    sg.fillStyle = fadeGrad;
-    sg.fillRect(0, 256 * 0.75, 512, 256 * 0.25);
+    // ── VERTICAL HUE + SPRINGING AO ──────────────────────────────────
+    // flipY default: canvas y=0 → v=1 = crown; y=256 → v=0 = base/belly.
+    // Multiply a pale-crown → deeper-bluer-belly gradient over the stripe field.
+    sg.globalCompositeOperation = 'multiply';
+    const hueGrad = sg.createLinearGradient(0, 0, 0, 256);
+    hueGrad.addColorStop(0, '#ffffff');   // crown: unchanged
+    hueGrad.addColorStop(1, '#9fd0d0');   // belly: slightly darker/bluer
+    sg.fillStyle = hueGrad;
+    sg.fillRect(0, 0, 512, 256);
+    // Dark AO band where the bulb springs from the collar (base = canvas bottom).
+    sg.fillStyle = `rgba(${valleyCol.r*255|0},${valleyCol.g*255|0},${valleyCol.b*255|0},0.5)`;
+    sg.fillRect(0, 200, 512, 56);
+    sg.globalCompositeOperation = 'source-over';
+    // Soften stripe convergence at the apex (canvas top).
+    const apexFade = sg.createLinearGradient(0, 0, 0, 36);
+    apexFade.addColorStop(0, baseHex);
+    apexFade.addColorStop(1, `rgba(${glazeCol.r*255|0},${glazeCol.g*255|0},${glazeCol.b*255|0},0)`);
+    sg.fillStyle = apexFade;
+    sg.fillRect(0, 0, 512, 36);
 
     const stripeTex = new THREE.CanvasTexture(stripeCanvas);
     stripeTex.colorSpace = THREE.SRGBColorSpace;
@@ -634,24 +785,26 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
     geo.setIndex(idxArr);
     geo.computeVertexNormals();
 
-    const cap = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+    const cap = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
       map: stripeTex,
       emissive: glazeCol,
-      emissiveIntensity: 0.12,
+      emissiveIntensity: 0.05,
+      specular: new THREE.Color(0x7fa9af),  // soft cyan-grey glaze sheen (dimmed: no bloom-flare)
+      shininess: 34,
     }));
     cap.position.y = capBase;
     g.add(cap);
 
     // Gold finial sphere + crescent
     const finialBase = capBase + capH + r * 0.06;
-    const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 8, 8), mat(C.gold));
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 16, 12), goldShiny);
     finial.position.y = finialBase;
     g.add(finial);
     // Crescent: two overlapping spheres (outer minus inner) approximated
     // by a torus-arc-like curved ring of small boxes
     const crescentR = r * 0.055;
     const crescentY = finialBase + r * 0.10;
-    const crescentMat = mat(C.gold);
+    const crescentMat = goldShiny;
     const crescentPts = 6;
     for (let ci = 0; ci < crescentPts; ci++) {
       const a = Math.PI * 0.25 + (ci / (crescentPts - 1)) * Math.PI * 1.5;
@@ -673,23 +826,41 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
       capPts.push(new THREE.Vector2(profileRad(t), capH * t));
     }
 
-    const cap = new THREE.Mesh(new THREE.LatheGeometry(capPts, 40), new THREE.MeshLambertMaterial({
-      color: glaze,
+    // Vertical glaze gradient: deep teal-blue belly → full glaze → pale crown.
+    // LatheGeometry v runs base→apex; flipY default → canvas y=0(top)=apex, y=128=base.
+    const grCanvas = document.createElement('canvas');
+    grCanvas.width = 4; grCanvas.height = 128;
+    const cg = grCanvas.getContext('2d')!;
+    const grad = cg.createLinearGradient(0, 0, 0, 128);
+    grad.addColorStop(0.00, ridgeHex);      // apex/crown — pale
+    grad.addColorStop(0.35, baseHex);       // upper belly — full glaze
+    grad.addColorStop(0.70, baseHex);       // belly — full glaze
+    grad.addColorStop(1.00, deepBellyHex);  // base/spring — deep teal-blue
+    cg.fillStyle = grad;
+    cg.fillRect(0, 0, 4, 128);
+    const grTex = new THREE.CanvasTexture(grCanvas);
+    grTex.colorSpace = THREE.SRGBColorSpace;
+    grTex.wrapS = grTex.wrapT = THREE.ClampToEdgeWrapping;
+
+    const cap = new THREE.Mesh(new THREE.LatheGeometry(capPts, 40), new THREE.MeshPhongMaterial({
+      map: grTex,
       emissive: glazeCol,
-      emissiveIntensity: 0.18,
+      emissiveIntensity: 0.06,
+      specular: new THREE.Color(0x7fa9af),  // soft cyan-grey glaze sheen (dimmed: no bloom-flare)
+      shininess: 38,
     }));
     cap.position.y = capBase;
     g.add(cap);
 
     // Gold finial sphere + crescent for smooth dome too
     const finialBase = capBase + capH + r * 0.06;
-    const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 8, 8), mat(C.gold));
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(r * 0.07, 16, 12), goldShiny);
     finial.position.y = finialBase;
     g.add(finial);
     // Crescent for smooth dome (slightly larger)
     const crescentR2 = r * 0.07;
     const crescentY2 = finialBase + r * 0.12;
-    const crescentMat2 = mat(C.gold);
+    const crescentMat2 = goldShiny;
     const crescentPts2 = 6;
     for (let ci = 0; ci < crescentPts2; ci++) {
       const a = Math.PI * 0.25 + (ci / (crescentPts2 - 1)) * Math.PI * 1.5;
@@ -705,7 +876,8 @@ export function dome(r: number, ribbed = false, glaze: number = C.turquoise): TH
   return g;
 }
 
-/** Single tapered minaret tower: bannai shaft, corbel cornice rings, flat lantern crown. */
+/** Single tapered minaret tower: bannai shaft, corbelled muqarnas balcony, open
+ *  lantern colonnade, glazed turquoise onion cap and a gold finial spike. */
 export function minaret(h: number): THREE.Group {
   const g = new THREE.Group();
 
@@ -713,8 +885,8 @@ export function minaret(h: number): THREE.Group {
   const shaftTex = minaretShaft();
   shaftTex.repeat.set(1, Math.max(1, Math.round(h / 8)));
   const shaftMat = new THREE.MeshLambertMaterial({ map: shaftTex });
-  const rBase = h * 0.072; // slender, like the real Registan minarets
-  const rTop  = h * 0.050; // gentle taper to the gallery
+  const rBase = h * 0.060; // slimmer shaft — towers read slender like the refs
+  const rTop  = h * 0.044; // gentle taper to the gallery
   const shaftH = h * 0.88;
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBase, shaftH, 20), shaftMat);
   shaft.position.y = shaftH / 2;
@@ -723,53 +895,121 @@ export function minaret(h: number): THREE.Group {
   // Single continuous tapering tower — the mid-shaft balcony (sharafa) was
   // removed so the minaret reads as ONE tower, not two stacked cylinders.
 
-  // ── CORBEL CORNICE (3 stacking rings, widening outward) ──────────
+  // ── CROWN: corbelled muqarnas balcony + open lantern colonnade + onion cap + finial ──
+  // Every same-material part is binned and merged so the rich crown stays ~5 draw calls
+  // (CREAM corbel/rings/dentils/columns/abacus = 1, textured core = 1, turquoise cap = 1,
+  // gold finial = 1) — same budget as the old flat crown.
   const corniceBase = shaftH;
-  const ringData: [number, number, number][] = [
-    // [yOffset from corniceBase, radius, ringHeight]
-    [0.000, rTop * 1.10, h * 0.018],
-    [0.024, rTop * 1.22, h * 0.022],
-    [0.052, rTop * 1.38, h * 0.026],
-  ];
-  for (const [yOff, r, rh] of ringData) {
-    const ring = new THREE.Mesh(
-      new THREE.CylinderGeometry(r, r * 0.96, rh, 16),
-      mat(C.cream),
-    );
-    ring.position.y = corniceBase + yOff * h + rh / 2;
-    g.add(ring);
+  const _cm = new THREE.Matrix4();
+  const creamGeos: THREE.BufferGeometry[] = [];
+  const pushCream = (geo: THREE.BufferGeometry, y: number) => {
+    geo.applyMatrix4(_cm.makeTranslation(0, y, 0));
+    creamGeos.push(geo);
+  };
+  let cy = corniceBase;   // running y as crown elements stack upward
+
+  // (a) Corbel splay — inverted frustum flaring outward as it rises (muqarnas underbelly)
+  const corbelH = h * 0.05;
+  pushCream(new THREE.CylinderGeometry(rTop * 1.7, rTop * 1.0, corbelH, 16), cy + corbelH / 2);
+  cy += corbelH;
+
+  // (b) Three cornice rings, strong flare — the projecting balcony lip
+  const ringRs = [rTop * 1.25, rTop * 1.55, rTop * 1.85];
+  const ringHs = [h * 0.018, h * 0.022, h * 0.026];
+  for (let i = 0; i < 3; i++) {
+    pushCream(new THREE.CylinderGeometry(ringRs[i], ringRs[i] * 0.96, ringHs[i], 16), cy + ringHs[i] / 2);
+    cy += ringHs[i];
   }
 
-  // ── FLAT LANTERN CROWN (flat top — no dome/cone/sphere) ───────────
-  // An arcaded lantern drum closed by a flat cornice disc. The minaret
-  // terminates flat per the brief (no bulb, no cone, no finial spike).
-  const [lastYOff, , lastRH] = ringData[2];
-  const crownBase = corniceBase + lastYOff * h + lastRH + h * 0.004;
+  // (c) Dentil ring — tiny stalactite brackets just under the balcony lip
+  const dentilR = rTop * 1.5, dentilN = 16, dentilH = h * 0.02;
+  for (let dN = 0; dN < dentilN; dN++) {
+    const a = (dN / dentilN) * Math.PI * 2;
+    const db = new THREE.BoxGeometry(rTop * 0.12, dentilH, rTop * 0.12);
+    db.applyMatrix4(_cm.makeTranslation(Math.cos(a) * dentilR, cy + dentilH / 2, Math.sin(a) * dentilR));
+    creamGeos.push(db);
+  }
+  cy += dentilH;
 
-  // Lantern drum: blind-arcade gallery wrapped around a short cylinder.
-  const lanternR = rTop * 0.96;
-  const lanternH = h * 0.075;
+  // (d) Balcony floor disc — the projecting walkway silhouette
+  const floorH = h * 0.018;
+  pushCream(new THREE.CylinderGeometry(rTop * 1.75, rTop * 1.75, floorH, 24), cy + floorH / 2);
+  cy += floorH;
+  const balconyY = cy;
+
+  // (e) Open lantern: slim textured core (dark behind the colonnade) + cream column ring
+  const lanternH = h * 0.10;
+  const coreR = rTop * 0.7;
   const lanternTex = archPanel(256, 128);
   lanternTex.wrapS = THREE.RepeatWrapping;
   lanternTex.repeat.set(4, 1);
-  const lantern = new THREE.Mesh(
-    new THREE.CylinderGeometry(lanternR, lanternR * 1.02, lanternH, 16),
+  const core = new THREE.Mesh(
+    new THREE.CylinderGeometry(coreR, coreR, lanternH, 16),
     new THREE.MeshLambertMaterial({ map: lanternTex }),
   );
-  lantern.position.y = crownBase + lanternH / 2;
-  lantern.castShadow = true;
-  g.add(lantern);
+  core.position.y = balconyY + lanternH / 2;
+  core.castShadow = true;
+  g.add(core);
 
-  // Flat cornice cap disc — a short cylinder with a flat top closing the minaret.
-  const capR = lanternR * 1.12;
-  const capH = h * 0.022;
-  const flatCap = new THREE.Mesh(
-    new THREE.CylinderGeometry(capR, lanternR * 1.04, capH, 16),
-    mat(C.cream),
+  // Column ring — slender cream columns; the gaps read as the open gallery against the sky
+  const colN = 10, colRingR = rTop * 1.35, colR2 = rTop * 0.10;
+  for (let c = 0; c < colN; c++) {
+    const a = (c / colN) * Math.PI * 2;
+    const cgeo = new THREE.CylinderGeometry(colR2, colR2, lanternH, 6);
+    cgeo.applyMatrix4(_cm.makeTranslation(Math.cos(a) * colRingR, balconyY + lanternH / 2, Math.sin(a) * colRingR));
+    creamGeos.push(cgeo);
+  }
+  // Abacus disc the cap dome seats on
+  const abacusH = h * 0.015;
+  pushCream(new THREE.CylinderGeometry(rTop * 1.45, rTop * 1.45, abacusH, 24), balconyY + lanternH + abacusH / 2);
+  const capSeat = balconyY + lanternH + abacusH;
+
+  // Merge the whole cream crown into ONE mesh
+  const creamMerged = mergeGeometries(creamGeos, false);
+  creamGeos.forEach(b => b.dispose());
+  if (creamMerged) {
+    const creamMesh = new THREE.Mesh(creamMerged, mat(C.cream));
+    creamMesh.castShadow = true;
+    g.add(creamMesh);
+  }
+
+  // (f) Glazed turquoise onion cap — the defining crown silhouette
+  const capR = rTop * 1.2;
+  const capDomeH = rTop * 1.6;
+  const capPts: THREE.Vector2[] = [
+    new THREE.Vector2(rTop * 1.0, 0),
+    new THREE.Vector2(capR, capDomeH * 0.28),
+    new THREE.Vector2(capR * 0.82, capDomeH * 0.62),
+    new THREE.Vector2(capR * 0.42, capDomeH * 0.88),
+    new THREE.Vector2(0, capDomeH),
+  ];
+  const capMesh = new THREE.Mesh(
+    new THREE.LatheGeometry(capPts, 24),
+    new THREE.MeshLambertMaterial({
+      color: C.turquoise,
+      emissive: new THREE.Color(C.turquoise),
+      emissiveIntensity: 0.15,   // matches dome() so it catches UnrealBloom
+    }),
   );
-  flatCap.position.y = crownBase + lanternH + capH / 2;
-  flatCap.castShadow = true;
-  g.add(flatCap);
+  capMesh.position.y = capSeat;
+  capMesh.castShadow = true;
+  g.add(capMesh);
+
+  // (g) Gold finial spike: cone + sphere merged into one gold mesh
+  const finialGeos: THREE.BufferGeometry[] = [];
+  const coneGeo = new THREE.ConeGeometry(rTop * 0.18, rTop * 0.9, 8);
+  coneGeo.applyMatrix4(_cm.makeTranslation(0, capSeat + capDomeH + rTop * 0.45, 0));
+  finialGeos.push(coneGeo);
+  const knobGeo = new THREE.SphereGeometry(rTop * 0.16, 8, 8);
+  knobGeo.applyMatrix4(_cm.makeTranslation(0, capSeat + capDomeH + rTop * 1.0, 0));
+  finialGeos.push(knobGeo);
+  const finialMerged = mergeGeometries(finialGeos, false);
+  finialGeos.forEach(b => b.dispose());
+  if (finialMerged) {
+    const fm = new THREE.Mesh(finialMerged, goldShiny);
+    fm.castShadow = true;
+    g.add(fm);
+  }
 
   return g;
 }
@@ -897,9 +1137,9 @@ function hujraFieldMat(wingStyle: 'diagonal-lattice' | 'meander' | 'arch-floral'
 // Shared cobalt frame material for the rectangular tile border around each arch.
 const _frameMat = new THREE.MeshLambertMaterial({ color: C.cobalt });
 // Shared deep-shadow soffit material — the reveal/ceiling inside each arch opening.
-const _archSoffitMat = new THREE.MeshLambertMaterial({ color: 0x2a1d10 });
+const _archSoffitMat = new THREE.MeshLambertMaterial({ color: 0x4a3622 }); // lifted from 0x2a1d10 so deep niches read shadowed-but-lit, not as black holes
 // Shared hujra-detail materials (one instance reused across all 16 facades).
-const _returnMat = new THREE.MeshLambertMaterial({ color: 0x33240f });       // deep-shadow reveal
+const _returnMat = new THREE.MeshLambertMaterial({ color: 0x52401f });       // deep-shadow reveal (lifted from 0x33240f)
 const _marbleMat = new THREE.MeshLambertMaterial({ color: C.marble });        // sills
 const _outlineMat = new THREE.MeshLambertMaterial({ color: C.turquoise, emissive: new THREE.Color(C.turquoise), emissiveIntensity: 0.14 });
 const _accentTurqMat = new THREE.MeshLambertMaterial({ color: C.turquoise, emissive: new THREE.Color(C.turquoise), emissiveIntensity: 0.10 });
@@ -947,6 +1187,7 @@ export function recessedHujraFace(
     goldTrim?: boolean;
     wingStyle?: 'diagonal-lattice' | 'meander' | 'arch-floral';
     isGroundFloor?: boolean; // ground floor niches read darker (doorways)
+    lanterns?: boolean;      // hang lit lanterns in the lower-storey hujra niches (default true)
   } = {},
 ): THREE.Group {
   const g = new THREE.Group();
@@ -1091,6 +1332,7 @@ export function recessedHujraFace(
   const accentGeos:   THREE.BufferGeometry[] = [];
   const frameGeos:    THREE.BufferGeometry[] = [];
   const outlineGeos:  THREE.BufferGeometry[] = [];
+  const lanternSites: LanternSite[] = [];   // lower-storey niche centres → hanging lanterns
 
   const _m = new THREE.Matrix4();
   const pushBox = (bin: THREE.BufferGeometry[], w: number, hh: number, dd: number, x: number, y: number, z: number) => {
@@ -1126,6 +1368,11 @@ export function recessedHujraFace(
       pushBox(returnGeos, 0.05, returnH, returnDepth, cxLocal + halfA, sBaseY + returnH / 2, returnZCenter);
       // (4b) Marble sill at niche base.
       pushBox(sillGeos, archW + 0.04, 0.07, returnDepth * 0.96, cxLocal, sBaseY + 0.035, returnZCenter);
+
+      // Lower storey only: record a lantern site hanging inside the arch opening.
+      if (s === STORIES - 1) {
+        lanternSites.push({ x: cxLocal, y: sBaseY + storyH * 0.50, z: BACK_Z + 0.26 });
+      }
 
       // (6a) Cobalt rectangular frame: bay rectangle minus the arch hole.
       const frameShape = new THREE.Shape();
@@ -1177,6 +1424,12 @@ export function recessedHujraFace(
   addMerged(accentGeos,  accentMat,      false);
   addMerged(frameGeos,   _frameMat,      true);
   addMerged(outlineGeos, archOutlineMat, false);
+
+  // ── HANGING LANTERNS (warm lit niches) ───────────────────────────
+  if ((opts.lanterns ?? true) && lanternSites.length) {
+    const lanternScale = Math.min(1.25, Math.max(0.7, (len / bays) / 3.0));
+    g.add(lanternRow(lanternSites, BACK_Z, lanternScale));
+  }
 
   // ── 7. KUFIC INSCRIPTION CORNICE BAND ────────────────────────────
   // Cobalt band with white kufic at the top of the facade, above the arcade stories.
