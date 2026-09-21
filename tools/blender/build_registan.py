@@ -82,6 +82,9 @@ TEXTURED = {          # material key -> (pattern fn, roughness)
     "GirihFrame": ("girih",   0.45),  # 8-point star strip (portal frames / friezes)
     "DrumBand":   ("kufic",   0.45),  # lapis band with white kufic strokes (drum & minaret bands)
     "Chevron":    ("chevron", 0.75),  # diagonal cobalt/turquoise chevrons (minaret & turret shafts)
+    "StarMedallion": ("star10",  0.45),  # Ulugh Beg spandrel decal: 10-point star on cobalt
+    "GoldRosette":   ("rosette", 0.45),  # Tilya-Kori spandrel decal: concentric gold/white petal rings
+    "SunTiger":      ("sun",     0.45),  # Sher-Dor spandrel decal: gold sun disc with rays on cobalt
 }
 
 def _frac(x):
@@ -141,6 +144,52 @@ def _pattern(kind, u, v):
         if t < 0.36:
             return white
         return buff
+    if kind in ("star10", "rosette", "sun"):
+        dx, dy = u - 0.5, v - 0.5
+        r, th = math.hypot(dx, dy), math.atan2(dy, dx)
+        if kind == "star10":
+            tri = abs(_frac(th * 10 / (2 * math.pi)) * 2 - 1)      # 0 at point, 1 between points
+            rs = 0.46 - 0.20 * tri                                 # star boundary radius
+            if r < 0.07:
+                return gold
+            if r < 0.10:
+                return white
+            if r < rs - 0.035:
+                return turq
+            if r < rs:
+                return white
+            if 0.475 < r < 0.495:
+                return white
+            return cobalt
+        if kind == "rosette":
+            pet = 1 + 0.10 * math.cos(th * 8)
+            rm = r / pet
+            if r < 0.06:
+                return gold
+            if r < 0.085:
+                return white
+            if rm < 0.20:
+                return gold if (rm > 0.17) else cobalt
+            if rm < 0.24:
+                return white
+            if rm < 0.36:
+                return gold if rm > 0.32 else cobalt
+            if rm < 0.40:
+                return white
+            if 0.46 < r < 0.485:
+                return gold
+            return cobalt
+        if kind == "sun":
+            if r < 0.20:
+                return gold
+            if r < 0.225:
+                return white
+            ray = _frac(th * 16 / (2 * math.pi))
+            if r < 0.46 and abs(ray - 0.5) < 0.12 * (1 - (r - 0.22) / 0.24):
+                return gold
+            if 0.47 < r < 0.49:
+                return white
+            return cobalt
     return buff
 
 _imgs = {}
@@ -382,10 +431,37 @@ def build_madrasah(p, buckets):
                 box_yz(shadow, bx, ys0, ys0 + storeyH, zWall - 0.01, zWall + 0.02, bayW)
                 box_yz(B("Turquoise"), bx, ys0 + storeyH * 0.58, ys0 + storeyH * 0.9, zWall + 0.02, zWall + 0.05, bayW * 0.9)
 
-    # ── side + back wings (courtyard is hollow) ──
+    # ── side + back wings (courtyard is hollow): recessed panel grid on the outer faces ──
+    PANEL_D = 0.15
+    sBase, sBand, sTop, sPil = 0.6, 0.3, 0.6, 0.35
+    sStorey = (sideH - sBase - sBand - sTop) / 2
+
+    def panel_face(place, length, c0):
+        """place(u, y, depth, w, h) -> box; u along the wall from c0, depth 0 = outer plane."""
+        npan = max(2, int(length / 2.6))
+        pw_ = (length - (npan + 1) * sPil) / npan
+        place(c0 + length / 2, sBase / 2, PANEL_D / 2, length, sBase, marble)                       # dado
+        place(c0 + length / 2, sBase + sStorey + sBand / 2, PANEL_D / 2, length, sBand, trim)        # mid band
+        place(c0 + length / 2, sideH - sTop / 2, PANEL_D / 2, length, sTop, tile)                    # top band
+        for k in range(npan + 1):
+            place(c0 + sPil / 2 + k * (sPil + pw_), sideH / 2, PANEL_D / 2, sPil, sideH, tile)       # pilasters
+        for st in range(2):
+            y0 = sBase + st * (sStorey + sBand)
+            for k in range(npan):
+                u = c0 + sPil + pw_ / 2 + k * (sPil + pw_)
+                place(u, y0 + sStorey / 2, PANEL_D - 0.01, pw_, sStorey, cobalt)                     # cobalt frame back
+                place(u, y0 + sStorey / 2, PANEL_D - 0.05, pw_ - 0.16, sStorey - 0.16, shadow)       # recessed buff panel
+
     for sgn in (-1, 1):
-        box(tile, sgn * (L / 2 - WING_T / 2), sideH / 2, sideZ, WING_T, sideH, sideLen)
-    box(tile, 0, sideH / 2, backZ, L, sideH, WING_T)
+        xo = sgn * L / 2                                                   # outer plane
+        box(tile, sgn * (L / 2 - WING_T / 2) - sgn * PANEL_D / 2, sideH / 2, sideZ, WING_T - PANEL_D, sideH, sideLen)
+        def place_side(u, y, depth, w, h, bk, sgn=sgn, xo=xo):
+            box(bk, xo - sgn * depth / 2, y, u, PANEL_D - depth + 0.02 if depth < PANEL_D / 2 else depth, h, w)
+        panel_face(place_side, sideLen, sideZ - sideLen / 2)
+    box(tile, 0, sideH / 2, backZ + PANEL_D / 2, L, sideH, WING_T - PANEL_D)
+    def place_back(u, y, depth, w, h, bk):
+        box(bk, u, y, zBack + depth / 2, w, h, PANEL_D - depth + 0.02 if depth < PANEL_D / 2 else depth)
+    panel_face(place_back, L, -L / 2)
 
     # ── pishtaq portal with pointed-arch iwan recess ──
     iw = pw * 0.62
@@ -400,6 +476,15 @@ def build_madrasah(p, buckets):
     apex_y = spandrel(girih, 0, ihw, ys, ph - 1.2, zIwan, zFront)               # girih spandrel (distinct from back wall)
     arch_band(marble, 0, ihw, ys, 0.28, zFront - 0.01, zFront + 0.04)           # white border band following the arch
     box_yz(girih, 0, ph - 1.2, ph, zIwan, zFront, iw)                            # girih frieze
+    # spandrel decals: single UV 0..1 quad per side, slightly proud of the front face
+    dec = B({"UlughBeg": "StarMedallion", "TilyaKori": "GoldRosette"}.get(p["name"], "SunTiger"))
+    ds = min(ihw * 0.72, (ph - 1.2 - ys) * 0.55)
+    dy = ph - 1.2 - ds / 2 - 0.15
+    for sgn in (-1, 1):
+        dx = sgn * (ihw - ds / 2 - 0.05)
+        zq = zFront + 0.03
+        dec.add([(dx - ds / 2, dy - ds / 2, zq), (dx + ds / 2, dy - ds / 2, zq), (dx + ds / 2, dy + ds / 2, zq), (dx - ds / 2, dy + ds / 2, zq)],
+                [(0, 1, 2, 3)], uvs=[[(0, 0), (1, 0), (1, 1), (0, 1)]])
     box_yz(marble, 0, 0, 0.6, zIwan, zFront + 0.02, iw)                          # threshold / dado
     box_yz(shadow, 0, 0.6, apex_y, zIwan - 0.02, zIwan + 0.02, iw)               # iwan back wall (shadowed buff)
     box_yz(buff, 0, ph - 0.1, ph + 0.25, -pd / 2, zFront, pw + 0.3)              # cornice cap
