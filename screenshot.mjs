@@ -1,6 +1,6 @@
-import { chromium } from 'playwright';
+import { launchChromium } from './harness/browser.mjs';
 
-const browser = await chromium.launch();
+const browser = await launchChromium();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 try {
   await page.goto('http://localhost:5173', { waitUntil: 'networkidle', timeout: 10000 });

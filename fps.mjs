@@ -1,9 +1,9 @@
-import { chromium } from 'playwright';
+import { launchChromium } from './harness/browser.mjs';
 
 const PORT = process.env.PORT || 5173;
 const URL = `http://localhost:${PORT}/`;
 
-const browser = await chromium.launch({
+const browser = await launchChromium({
   args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });

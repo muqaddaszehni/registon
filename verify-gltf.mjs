@@ -6,9 +6,9 @@
 // Usage: node verify-gltf.mjs            (uses a fresh vite on PORT, default 5199)
 //        PORT=5173 node verify-gltf.mjs  (attaches to an already-running server if it answers)
 
-import { chromium } from 'playwright';
+import { launchChromium } from './harness/browser.mjs';
 import { spawn } from 'child_process';
-import { mkdirSync, existsSync, readdirSync } from 'fs';
+import { mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -19,24 +19,6 @@ const URL = `http://localhost:${PORT}/`;
 const SETTLE_MS = 4000;      // wait after load (intro + LOD settle)
 const LAUNCH_ARGS = ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
 mkdirSync(OUT, { recursive: true });
-
-// The installed playwright may expect a newer Chromium build than the one
-// pre-installed under PLAYWRIGHT_BROWSERS_PATH; fall back to whatever is there.
-function findChromium() {
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
-  try { return chromium.executablePath() && existsSync(chromium.executablePath()) ? undefined : scan(); } catch { return scan(); }
-  function scan() {
-    const base = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
-    const dirs = existsSync(base) ? readdirSync(base).filter(d => /^chromium/.test(d)).sort().reverse() : [];
-    for (const d of dirs) {
-      for (const bin of ['chrome-linux/chrome', 'chrome-linux/headless_shell', 'chrome-linux/chrome-headless-shell']) {
-        const p = resolve(base, d, bin);
-        if (existsSync(p)) { console.log(`[browser] using ${p}`); return p; }
-      }
-    }
-    return undefined;
-  }
-}
 
 // ---------- vite ----------
 async function alreadyUp() {
@@ -101,7 +83,7 @@ let exitCode = 0;
 let browser;
 try {
   await startVite();
-  browser = await chromium.launch({ args: LAUNCH_ARGS, executablePath: findChromium() });
+  browser = await launchChromium({ args: LAUNCH_ARGS });
   const runs = [];
   for (const [name, query] of [['procedural', ''], ['gltf', '?gltf']]) {
     console.log(`\n[run] ${name}  ${URL}${query}`);
