@@ -66,7 +66,11 @@ const perf = { fps: 0, frameMs: 0, cpuMs: 0, calls: 0, tris: 0 };
 (window as unknown as Record<string, unknown>).__perf = perf;
 let emaInt = 16.7, emaCpu = 4;
 
+// renderer.info resets on every render() call, and the composer renders several
+// passes per frame, so without this the counters only see the final fullscreen quad.
+renderer.info.autoReset = false;
 renderer.setAnimationLoop(() => {
+  renderer.info.reset();
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 0.05);
   const interval = now - last;
