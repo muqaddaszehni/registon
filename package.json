@@ -7,10 +7,17 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "model:build": "python3 tools/blender/build_registan.py",
+    "model:optimize": "node scripts/optimize-glb.mjs",
+    "model": "npm run model:build && npm run model:optimize"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.0",
+    "@gltf-transform/extensions": "^4.5.0",
+    "@gltf-transform/functions": "^4.5.0",
     "@types/three": "^0.184.1",
+    "meshoptimizer": "^1.2.0",
     "playwright": "^1.60.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
