@@ -36,20 +36,20 @@ COLORS = {
 # Per-madrasah parameters (§1 of the spec; world numbers from src/buildings/*.ts)
 MADRASAHS = [
     dict(name="UlughBeg", facadeLen=18, portal=dict(w=8, h=15, d=5), wingH=7,
-         bays=4, minarets=[dict(offset=-10.8, h=17), dict(offset=10.8, h=17)],
+         bays=4, minarets=[dict(offset=-10.8, h=19), dict(offset=10.8, h=19)],
          domes=[], turrets=[], glaze="GlazeSD", goldTrim=False,
          world=dict(x=-13.5, z=0.0, rotY=math.pi / 2)),
     dict(name="SherDor", facadeLen=18, portal=dict(w=8, h=15, d=5), wingH=7,
-         bays=4, minarets=[dict(offset=-10.8, h=17), dict(offset=10.8, h=17)],
+         bays=4, minarets=[dict(offset=-10.8, h=19), dict(offset=10.8, h=19)],
          # 2 ribbed turquoise domes on tall drums behind the portal corners (spec §1.2, §5.1)
-         domes=[dict(offset=-6.6, r=2.6, z=-4.5, drumTop=3.0, ribs=24),
-                dict(offset=6.6, r=2.6, z=-4.5, drumTop=3.0, ribs=24)],
+         domes=[dict(offset=-6.6, r=2.6, z=-4.5, drumTop=4.5, ribs=24),
+                dict(offset=6.6, r=2.6, z=-4.5, drumTop=4.5, ribs=24)],
          turrets=[], glaze="GlazeSD", goldTrim=False,
          world=dict(x=13.0, z=0.0, rotY=-math.pi / 2)),
     dict(name="TilyaKori", facadeLen=26, portal=dict(w=8, h=10.5, d=5), wingH=6,  # 10.5/6 = 1.75 (spec §1.3)
          bays=8, minarets=[],
          # one big dome, viewer's LEFT, high cylindrical drum (spec §1.3)
-         domes=[dict(offset=-9, r=3.8, z=-4.0, drumTop=4.0, ribs=32)],
+         domes=[dict(offset=-9, r=3.8, z=-4.0, drumTop=6.0, ribs=32)],
          turrets=[dict(offset=-14.1, h=7, r=0.9), dict(offset=14.1, h=7, r=0.9)],
          glaze="GlazeTK", goldTrim=True,
          world=dict(x=0.0, z=-12.5, rotY=0.0)),
@@ -275,7 +275,7 @@ def cylinder(b, cx, y0, cz, rb, rt, h, n=SEG, cap_bottom=True, cap_top=True):
     b.add(v, f, uvs)
 
 
-def dome(b, cx, y0, cz, r, ribs=24, rib_amp=0.035, n_lon=48, n_lat=14, under=math.radians(22)):
+def dome(b, cx, y0, cz, r, ribs=24, rib_amp=0.09, n_lon=48, n_lat=14, under=math.radians(36)):
     """Onion-profile ribbed dome: sphere of radius r whose centre is lifted so the
     base ring (latitude -under) sits at y0 and is narrower than the max bulge."""
     cy = y0 + r * math.sin(under)
@@ -284,7 +284,7 @@ def dome(b, cx, y0, cz, r, ribs=24, rib_amp=0.035, n_lon=48, n_lat=14, under=mat
         lat = -under + (math.pi / 2 + under) * j / n_lat
         for i in range(n_lon):
             th = 2 * math.pi * i / n_lon
-            s = 1 + rib_amp * math.cos(ribs * th) * math.cos(lat)
+            s = 1 + rib_amp * math.cos(ribs * th) * math.cos(lat) * min(1.0, (lat + under) / 0.35 + 0.15)
             rr = r * math.cos(lat) * s
             v.append((cx + rr * math.cos(th), cy + r * math.sin(lat), cz + rr * math.sin(th)))
     apex = len(v)
@@ -322,6 +322,14 @@ def spandrel(b, cx, hw, ys, yt, z0, z1):
     prof = [(cx + x, y) for x, y in arc] + [(cx + hw, yt), (cx - hw, yt)]
     prism(b, prof, z0, z1)
     return apex_y
+
+
+def arch_band(b, cx, hw, ys, t, z0, z1):
+    """Thin ring following the pointed arch (inner radius hw, width t)."""
+    inner, _ = pointed_arch(hw, ys)
+    outer, _ = pointed_arch(hw + t, ys)
+    prof = [(cx + x, y) for x, y in inner] + [(cx + x, y) for x, y in reversed(outer)]
+    prism(b, prof, z0, z1)
 
 
 # ────────────────────────── madrasah ──────────────────────────
@@ -389,10 +397,11 @@ def build_madrasah(p, buckets):
         px = sgn * (ihw + (pw / 2 - ihw) / 2)
         box_yz(tile, px, 0, ph, zIwan, zFront, pw / 2 - ihw)
         box_yz(girih, px, 0.6, ph - 0.6, zFront - 0.02, zFront + 0.03, (pw / 2 - ihw) * 0.55)  # girih tile strip
-    apex_y = spandrel(cobalt, 0, ihw, ys, ph - 1.2, zIwan, zFront)              # tiled spandrel
+    apex_y = spandrel(girih, 0, ihw, ys, ph - 1.2, zIwan, zFront)               # girih spandrel (distinct from back wall)
+    arch_band(marble, 0, ihw, ys, 0.28, zFront - 0.01, zFront + 0.04)           # white border band following the arch
     box_yz(girih, 0, ph - 1.2, ph, zIwan, zFront, iw)                            # girih frieze
     box_yz(marble, 0, 0, 0.6, zIwan, zFront + 0.02, iw)                          # threshold / dado
-    box_yz(cobalt, 0, 0.6, apex_y, zIwan - 0.02, zIwan + 0.02, iw)               # iwan back wall
+    box_yz(shadow, 0, 0.6, apex_y, zIwan - 0.02, zIwan + 0.02, iw)               # iwan back wall (shadowed buff)
     box_yz(buff, 0, ph - 0.1, ph + 0.25, -pd / 2, zFront, pw + 0.3)              # cornice cap
 
     # ── minarets: tapered shaft, corbelled gallery, flat lantern ──
@@ -402,9 +411,13 @@ def build_madrasah(p, buckets):
         cylinder(chevron, x, 0, zFront - 1.2, 1.0, 0.72, shaftH)                # chevron shaft
         cylinder(band, x, shaftH * 0.33, zFront - 1.2, 0.93, 0.92, 0.35)         # kufic band
         cylinder(band, x, shaftH * 0.66, zFront - 1.2, 0.85, 0.84, 0.35)
-        cylinder(buff, x, shaftH - 0.6, zFront - 1.2, 0.72, 1.05, 0.6)           # corbel
-        cylinder(lapis, x, shaftH, zFront - 1.2, 1.1, 1.1, 0.45)                 # gallery ring
-        cylinder(buff, x, shaftH + 0.45, zFront - 1.2, 0.68, 0.62, h - shaftH - 0.45)  # lantern
+        # stepped corbelled gallery (muqarnas): 3 rings flaring 0.72 -> ~0.94 (1.3x shaft top)
+        cylinder(buff, x, shaftH - 0.9, zFront - 1.2, 0.72, 0.80, 0.3)
+        cylinder(band, x, shaftH - 0.6, zFront - 1.2, 0.80, 0.87, 0.3)
+        cylinder(buff, x, shaftH - 0.3, zFront - 1.2, 0.87, 0.94, 0.3)
+        cylinder(lapis, x, shaftH, zFront - 1.2, 0.95, 0.95, 0.5)                # gallery parapet ring
+        cylinder(gold, x, shaftH + 0.5, zFront - 1.2, 0.95, 0.95, 0.08)          # gold lip
+        cylinder(buff, x, shaftH + 0.58, zFront - 1.2, 0.66, 0.60, h - shaftH - 0.58)  # short lantern
         cylinder(gold, x, h, zFront - 1.2, 0.7, 0.7, 0.12)                       # flat top
 
     # ── domes: chamber block, tall drum with lapis band, ribbed onion dome, gold finial ──
