@@ -76,6 +76,7 @@ All tunables live in the `PARAMETERS` block at the top of the script.
 | `goldTrim` | Tilya-Kori uses gold for storey bands, portal strips and frieze; the others use cobalt | §1.3 |
 | `TOTAL_DEPTH`, `WING_T` | 9.0 / 2.0 as in `madrasah.ts` | app |
 | `NICHE_DEPTH`, `IWAN_DEPTH`, `DRUM_R_FACTOR`, `SEG` | 0.35 / 3.0 / 0.86 / 24 | tuning |
+| `TEX_SIZE`, `TEXTURED` | 256 px tileable pattern images generated in pure Python (`_pattern`) and packed into the GLB: `BuffTile` banna'i brick lattice (wing spandrels/pilasters/cornice, side+back wings, portal piers, dome drums), `GirihFrame` 8-point star strip (portal pier strips + frieze), `DrumBand` lapis kufic band (drum inscription band, minaret bands), `Chevron` cobalt/turquoise chevrons (minaret + turret shafts). UVs are box-projected (cylindrical for cylinders) at **1 tile per 1.0 world unit** | §2, §5 |
 
 ## Loading in the app
 

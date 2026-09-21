@@ -75,6 +75,98 @@ def srgb_to_linear(c):
     return tuple((v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4) if i < 3 else v
                  for i, v in enumerate(c))
 
+# ────────────────────────── procedural tile textures ──────────────────────────
+TEX_SIZE = 256        # px per tile; 1 tile == 1.0 world unit on the wall (see Bucket.add)
+TEXTURED = {          # material key -> (pattern fn, roughness)
+    "BuffTile":   ("bannai",  0.8),   # banna'i glazed-brick lattice on buff (wing facades, piers, drums)
+    "GirihFrame": ("girih",   0.45),  # 8-point star strip (portal frames / friezes)
+    "DrumBand":   ("kufic",   0.45),  # lapis band with white kufic strokes (drum & minaret bands)
+    "Chevron":    ("chevron", 0.75),  # diagonal cobalt/turquoise chevrons (minaret & turret shafts)
+}
+
+def _frac(x):
+    return x - math.floor(x)
+
+def _pattern(kind, u, v):
+    """Tileable pattern colour (sRGB 0..1) at tile coords u,v in [0,1)."""
+    buff, cobalt, turq = hex2rgb(COLORS["Buff"])[:3], hex2rgb(COLORS["Cobalt"])[:3], hex2rgb(COLORS["Turquoise"])[:3]
+    lapis, gold, white = hex2rgb(COLORS["Lapis"])[:3], hex2rgb(COLORS["Gold"])[:3], (0.94, 0.93, 0.88)
+    if kind == "bannai":
+        a, b = _frac(u + v), _frac(u - v)
+        if abs(a - 0.5) < 0.035 or abs(b - 0.5) < 0.035:
+            return cobalt
+        du, dv = abs(u - 0.5), abs(v - 0.5)
+        if du + dv < 0.13:
+            return turq
+        if min(du + dv, 1 - du - dv if du + dv > 0.5 else 1) > 0.37 and (du + dv) > 0.37:
+            return cobalt
+        if _frac(v * 8) < 0.07 or _frac(u * 4 + (0.5 if int(v * 8) % 2 else 0)) < 0.035:
+            return tuple(c * 0.9 for c in buff)
+        return buff
+    if kind == "girih":
+        if v < 0.05 or v > 0.95:
+            return white
+        du, dv = abs(_frac(u * 2) - 0.5), abs(v - 0.5)
+        sq, dia = max(du, dv), (du + dv) / 1.4142
+        R, w = 0.3, 0.045
+        inside = sq < R or dia < R
+        inner = sq < R - w or dia < R - w
+        if inside and not inner:
+            return white
+        if inner:
+            if math.hypot(du, dv) < 0.07:
+                return gold
+            return turq if max(du, dv) < R - w - 0.1 else cobalt
+        return cobalt
+    if kind == "kufic":
+        if v < 0.06 or v > 0.94:
+            return white
+        cell, t = int(u * 6), _frac(u * 6)
+        if 0.18 < v < 0.82 and 0.3 < t < 0.5:
+            return white
+        if cell % 2 == 0 and 0.42 < v < 0.58 and 0.3 < t < 0.85:
+            return white
+        if cell % 2 == 1 and 0.66 < v < 0.82 and 0.05 < t < 0.5:
+            return white
+        if cell % 3 == 0 and 0.18 < v < 0.34 and 0.5 < t < 0.9:
+            return turq
+        return lapis
+    if kind == "chevron":
+        zig = abs(_frac(u * 2) * 2 - 1)          # triangle wave, period 0.5
+        t = _frac(v * 3 + zig * 0.5)
+        if t < 0.22:
+            return cobalt
+        if t < 0.32:
+            return turq
+        if t < 0.36:
+            return white
+        return buff
+    return buff
+
+_imgs = {}
+def tile_image(kind, size=TEX_SIZE):
+    if kind in _imgs:
+        return _imgs[kind]
+    px = [0.0] * (size * size * 4)
+    for y in range(size):
+        v = (y + 0.5) / size
+        row = 4 * y * size
+        for x in range(size):
+            r, g, b = _pattern(kind, (x + 0.5) / size, v)
+            i = row + 4 * x
+            px[i], px[i + 1], px[i + 2], px[i + 3] = r, g, b, 1.0
+    img = bpy.data.images.new(f"tile_{kind}", size, size, alpha=False)
+    img.pixels = px
+    try:
+        img.pack()
+    except Exception:
+        path = os.path.join(os.path.dirname(OUT), f"tile_{kind}.png")
+        img.filepath_raw = path
+        img.file_format = "PNG"
+        img.save()
+    _imgs[kind] = img
+    return img
+
 _mats = {}
 def material(key):
     if key in _mats:
@@ -82,6 +174,15 @@ def material(key):
     m = bpy.data.materials.new(key)
     m.use_nodes = True
     bsdf = m.node_tree.nodes["Principled BSDF"]
+    if key in TEXTURED:
+        kind, rough = TEXTURED[key]
+        tex = m.node_tree.nodes.new("ShaderNodeTexImage")
+        tex.image = tile_image(kind)
+        tex.interpolation = "Closest"
+        m.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        bsdf.inputs["Roughness"].default_value = rough
+        _mats[key] = m
+        return m
     bsdf.inputs["Base Color"].default_value = srgb_to_linear(hex2rgb(COLORS[key]))
     if key == "Gold":
         bsdf.inputs["Metallic"].default_value = 0.85
@@ -99,15 +200,37 @@ def material(key):
 
 
 class Bucket:
-    """Accumulates verts/faces for one (madrasah, material) mesh."""
+    """Accumulates verts/faces (+ per-loop UVs) for one (madrasah, material) mesh."""
     def __init__(self):
-        self.verts, self.faces = [], []
+        self.verts, self.faces, self.uvs = [], [], []
 
-    def add(self, verts, faces):
+    def add(self, verts, faces, uvs=None):
         base = len(self.verts)
         # local three.js (x, y, z) -> Blender local (x, -z, y)
         self.verts.extend((x, -z, y) for (x, y, z) in verts)
         self.faces.extend(tuple(i + base for i in f) for f in faces)
+        if uvs is None:
+            uvs = [_box_uv(verts, f) for f in faces]
+        for fu in uvs:
+            self.uvs.extend(fu)
+
+
+def _box_uv(verts, f):
+    """Planar box projection in three.js local units (1 texture tile == 1 world unit)."""
+    if len(f) < 3:
+        return [(0.0, 0.0)] * len(f)
+    (ax, ay, az), (bx, by, bz), (cx, cy, cz) = verts[f[0]], verts[f[1]], verts[f[2]]
+    nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay)
+    ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az)
+    nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    n = max(abs(nx), abs(ny), abs(nz))
+    if n == 0:
+        return [(0.0, 0.0)] * len(f)
+    if abs(nx) == n:
+        return [(verts[i][2], verts[i][1]) for i in f]
+    if abs(ny) == n:
+        return [(verts[i][0], verts[i][2]) for i in f]
+    return [(verts[i][0], verts[i][1]) for i in f]
 
 
 def box(b, cx, cy, cz, w, h, d):
@@ -117,7 +240,7 @@ def box(b, cx, cy, cz, w, h, d):
     z0, z1 = cz - d / 2, cz + d / 2
     v = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
          (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
-    f = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 4 + 3), (3, 0, 4, 7)]
+    f = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
     b.add(v, f)
 
 
@@ -140,11 +263,16 @@ def cylinder(b, cx, y0, cz, rb, rt, h, n=SEG, cap_bottom=True, cap_top=True):
     v = [(cx + rb * math.cos(2 * math.pi * i / n), y0, cz + rb * math.sin(2 * math.pi * i / n)) for i in range(n)]
     v += [(cx + rt * math.cos(2 * math.pi * i / n), y0 + h, cz + rt * math.sin(2 * math.pi * i / n)) for i in range(n)]
     f = [(i, (i + 1) % n, (i + 1) % n + n, i + n) for i in range(n)]
+    circ = max(1, round(math.pi * (rb + rt)))      # whole tiles around the circumference
+    uvs = [[(i / n * circ, y0), ((i + 1) / n * circ, y0), ((i + 1) / n * circ, y0 + h), (i / n * circ, y0 + h)]
+           for i in range(n)]
     if cap_bottom:
         f.append(tuple(reversed(range(n))))
+        uvs.append([(v[i][0], v[i][2]) for i in reversed(range(n))])
     if cap_top:
         f.append(tuple(range(n, 2 * n)))
-    b.add(v, f)
+        uvs.append([(v[i][0], v[i][2]) for i in range(n, 2 * n)])
+    b.add(v, f, uvs)
 
 
 def dome(b, cx, y0, cz, r, ribs=24, rib_amp=0.035, n_lon=48, n_lat=14, under=math.radians(22)):
@@ -201,6 +329,7 @@ def build_madrasah(p, buckets):
     B = lambda key: buckets.setdefault(key, Bucket())
     buff, shadow, cobalt = B("Buff"), B("BuffShadow"), B("Cobalt")
     gold, marble, lapis, glaze = B("Gold"), B("Marble"), B("Lapis"), B(p["glaze"])
+    tile, girih, band, chevron = B("BuffTile"), B("GirihFrame"), B("DrumBand"), B("Chevron")
     trim = gold if p["goldTrim"] else cobalt
 
     L, wingH, pw, ph, pd = p["facadeLen"], p["wingH"], p["portal"]["w"], p["portal"]["h"], p["portal"]["d"]
@@ -231,24 +360,24 @@ def build_madrasah(p, buckets):
         # frame bands at the full front plane
         box_yz(marble, cx, 0, baseH, zWall, zFront, segW)
         box_yz(trim, cx, baseH + storeyH, baseH + storeyH + bandH, zWall, zFront, segW)
-        box_yz(buff, cx, wingH - topH, wingH, zWall, zFront, segW)
+        box_yz(tile, cx, wingH - topH, wingH, zWall, zFront, segW)
         box_yz(cobalt, cx, wingH - topH + 0.15, wingH - 0.15, zFront - 0.02, zFront + 0.02, segW)  # frieze
         for k in range(nb + 1):
             px = x0 + pil / 2 + k * (pil + bayW)
-            box_yz(buff, px, baseH, wingH - topH, zWall, zFront, pil)
+            box_yz(tile, px, baseH, wingH - topH, zWall, zFront, pil)
         for s in range(2):
             ys0 = baseH + s * (storeyH + bandH)
             for k in range(nb):
                 bx = x0 + pil + hw + k * (pil + bayW)
-                spandrel(buff, bx, hw, ys0 + storeyH * 0.58, ys0 + storeyH, zWall, zFront)
+                spandrel(tile, bx, hw, ys0 + storeyH * 0.58, ys0 + storeyH, zWall, zFront)
                 # shadowed niche back + small turquoise tympanum panel
                 box_yz(shadow, bx, ys0, ys0 + storeyH, zWall - 0.01, zWall + 0.02, bayW)
                 box_yz(B("Turquoise"), bx, ys0 + storeyH * 0.58, ys0 + storeyH * 0.9, zWall + 0.02, zWall + 0.05, bayW * 0.9)
 
     # ── side + back wings (courtyard is hollow) ──
     for sgn in (-1, 1):
-        box(buff, sgn * (L / 2 - WING_T / 2), sideH / 2, sideZ, WING_T, sideH, sideLen)
-    box(buff, 0, sideH / 2, backZ, L, sideH, WING_T)
+        box(tile, sgn * (L / 2 - WING_T / 2), sideH / 2, sideZ, WING_T, sideH, sideLen)
+    box(tile, 0, sideH / 2, backZ, L, sideH, WING_T)
 
     # ── pishtaq portal with pointed-arch iwan recess ──
     iw = pw * 0.62
@@ -258,10 +387,10 @@ def build_madrasah(p, buckets):
     box(buff, 0, ph / 2, (zIwan + (-pd / 2)) / 2, pw, ph, zIwan + pd / 2)          # body
     for sgn in (-1, 1):                                                          # piers
         px = sgn * (ihw + (pw / 2 - ihw) / 2)
-        box_yz(buff, px, 0, ph, zIwan, zFront, pw / 2 - ihw)
-        box_yz(trim, px, 0.6, ph - 0.6, zFront - 0.02, zFront + 0.03, (pw / 2 - ihw) * 0.55)  # tile strip
+        box_yz(tile, px, 0, ph, zIwan, zFront, pw / 2 - ihw)
+        box_yz(girih, px, 0.6, ph - 0.6, zFront - 0.02, zFront + 0.03, (pw / 2 - ihw) * 0.55)  # girih tile strip
     apex_y = spandrel(cobalt, 0, ihw, ys, ph - 1.2, zIwan, zFront)              # tiled spandrel
-    box_yz(trim, 0, ph - 1.2, ph, zIwan, zFront, iw)                             # calligraphy frieze
+    box_yz(girih, 0, ph - 1.2, ph, zIwan, zFront, iw)                            # girih frieze
     box_yz(marble, 0, 0, 0.6, zIwan, zFront + 0.02, iw)                          # threshold / dado
     box_yz(cobalt, 0, 0.6, apex_y, zIwan - 0.02, zIwan + 0.02, iw)               # iwan back wall
     box_yz(buff, 0, ph - 0.1, ph + 0.25, -pd / 2, zFront, pw + 0.3)              # cornice cap
@@ -270,9 +399,9 @@ def build_madrasah(p, buckets):
     for m in p["minarets"]:
         x, h = m["offset"], m["h"]
         shaftH = h * 0.85
-        cylinder(buff, x, 0, zFront - 1.2, 1.0, 0.72, shaftH)
-        cylinder(cobalt, x, shaftH * 0.33, zFront - 1.2, 0.93, 0.92, 0.35)       # tile band
-        cylinder(cobalt, x, shaftH * 0.66, zFront - 1.2, 0.85, 0.84, 0.35)
+        cylinder(chevron, x, 0, zFront - 1.2, 1.0, 0.72, shaftH)                # chevron shaft
+        cylinder(band, x, shaftH * 0.33, zFront - 1.2, 0.93, 0.92, 0.35)         # kufic band
+        cylinder(band, x, shaftH * 0.66, zFront - 1.2, 0.85, 0.84, 0.35)
         cylinder(buff, x, shaftH - 0.6, zFront - 1.2, 0.72, 1.05, 0.6)           # corbel
         cylinder(lapis, x, shaftH, zFront - 1.2, 1.1, 1.1, 0.45)                 # gallery ring
         cylinder(buff, x, shaftH + 0.45, zFront - 1.2, 0.68, 0.62, h - shaftH - 0.45)  # lantern
@@ -284,8 +413,8 @@ def build_madrasah(p, buckets):
         drumR = r * DRUM_R_FACTOR
         drumTopY = wingH + d["drumTop"]
         box(buff, x, sideH / 2, z, 2 * drumR + 0.8, sideH, 2 * drumR + 0.8)      # darskhana block
-        cylinder(buff, x, sideH - 0.05, z, drumR * 1.04, drumR, drumTopY - sideH + 0.05)
-        cylinder(lapis, x, drumTopY - 1.2, z, drumR * 1.02, drumR * 1.02, 0.7)   # inscription band
+        cylinder(tile, x, sideH - 0.05, z, drumR * 1.04, drumR, drumTopY - sideH + 0.05)   # banna'i drum
+        cylinder(band, x, drumTopY - 1.2, z, drumR * 1.02, drumR * 1.02, 0.7)    # kufic inscription band
         cylinder(B("Turquoise"), x, drumTopY - 0.45, z, drumR * 1.03, drumR * 1.03, 0.35)
         dome(glaze, x, drumTopY, z, r, ribs=d["ribs"])
         cylinder(gold, x, drumTopY + r * 1.36, z, 0.18, 0.12, r * 0.25)
@@ -294,8 +423,8 @@ def build_madrasah(p, buckets):
     # ── Tilya-Kori corner guldasta turrets ──
     for t in p["turrets"]:
         x, h, r = t["offset"], t["h"], t["r"]
-        cylinder(buff, x, 0, zFront - 1.0, r, r * 0.85, h)
-        cylinder(lapis, x, h * 0.55, zFront - 1.0, r * 0.9, r * 0.9, 0.3)
+        cylinder(chevron, x, 0, zFront - 1.0, r, r * 0.85, h)
+        cylinder(band, x, h * 0.55, zFront - 1.0, r * 0.9, r * 0.9, 0.3)
         cylinder(buff, x, h, zFront - 1.0, r * 0.85, r * 1.05, 0.35)
         dome(glaze, x, h + 0.35, zFront - 1.0, r * 0.95, ribs=12, n_lon=24, n_lat=8)
 
@@ -327,6 +456,11 @@ def main():
             me.from_pydata(bk.verts, [], bk.faces)
             me.validate(clean_customdata=False)
             me.update()
+            uv = me.uv_layers.new(name="UVMap")
+            if len(uv.data) == len(bk.uvs):
+                uv.data.foreach_set("uv", [c for xy in bk.uvs for c in xy])
+            else:
+                print(f"[registan] warn: loop/uv mismatch on {p['name']}_{key}: {len(uv.data)} vs {len(bk.uvs)}")
             me.materials.append(material(key))
             ob = bpy.data.objects.new(f"{p['name']}_{key}", me)
             ob.parent = root
@@ -334,7 +468,7 @@ def main():
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", export_apply=True, export_yup=True,
-                              export_materials="EXPORT", export_normals=True, export_texcoords=False,
+                              export_materials="EXPORT", export_normals=True, export_texcoords=True, export_image_format="AUTO",
                               export_animations=False, export_skins=False, export_cameras=False, export_lights=False)
 
     meshes = [o for o in scene.objects if o.type == "MESH"]
