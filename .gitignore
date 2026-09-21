@@ -3,3 +3,4 @@ node_modules/
 dist/
 test-results/
 *.mjs.tmp
+docs/screenshots/verify-*.png

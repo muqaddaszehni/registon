@@ -1,10 +1,10 @@
-import { chromium } from 'playwright';
+import { launchChromium } from './harness/browser.mjs';
 import { mkdirSync } from 'fs';
 
 const OUT = process.argv[2] || '/tmp/registon-shots';
 mkdirSync(OUT, { recursive: true });
 
-const browser = await chromium.launch();
+const browser = await launchChromium();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 });
 page.on('console', m => { if (m.type() === 'error') console.log('PAGE ERROR:', m.text()); });
 page.on('pageerror', e => console.log('PAGE EXCEPTION:', e.message));

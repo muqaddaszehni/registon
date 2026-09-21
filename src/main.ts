@@ -16,6 +16,7 @@ import { cornerButton } from './ui/buttons';
 import { ulughBeg } from './buildings/ulughbeg';
 import { sherDor } from './buildings/sherdor';
 import { tilyaKori } from './buildings/tilyakori';
+import { gltfRequested, loadRegistanGLB, countMeshes } from './buildings/gltf';
 import { parseLayout } from './world/grid';
 import { LAYOUT } from './world/layout';
 import { Character } from './character/character';
@@ -65,7 +66,11 @@ const perf = { fps: 0, frameMs: 0, cpuMs: 0, calls: 0, tris: 0 };
 (window as unknown as Record<string, unknown>).__perf = perf;
 let emaInt = 16.7, emaCpu = 4;
 
+// renderer.info resets on every render() call, and the composer renders several
+// passes per frame, so without this the counters only see the final fullscreen quad.
+renderer.info.autoReset = false;
 renderer.setAnimationLoop(() => {
+  renderer.info.reset();
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 0.05);
   const interval = now - last;
@@ -129,9 +134,26 @@ cornerButton('+', 'Zoom in', 2, () => zoomCtrl.zoomIn(orbit.state));
 // Zoom-out button (slot 3)
 cornerButton('−', 'Zoom out', 3, () => zoomCtrl.zoomOut(orbit.state));
 
-scene.add(ulughBeg());
-scene.add(sherDor());
-scene.add(tilyaKori());
+function addProceduralBuildings(): void {
+  scene.add(ulughBeg());
+  scene.add(sherDor());
+  scene.add(tilyaKori());
+}
+if (gltfRequested()) {
+  // Optional Blender GLB (`?gltf`); falls back to the procedural builders.
+  void loadRegistanGLB().then(group => {
+    if (group) {
+      scene.add(group);
+      console.log(`[gltf] loaded ${countMeshes(group)} meshes`);
+    } else {
+      console.log('[gltf] falling back to procedural buildings');
+      addProceduralBuildings();
+    }
+    shadowHold = 4; // re-render the frozen shadow map now that geometry landed
+  });
+} else {
+  addProceduralBuildings();
+}
 
 const grid = parseLayout(LAYOUT);
 const hero = new Character(grid);

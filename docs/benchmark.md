@@ -32,3 +32,13 @@ converged.
 ## Benchmark views (`bench.mjs`) ↔ reference
 - `pano` ↔ panorama.jpg · `sherdor` ↔ sherdor.jpg · `tilyakori` ↔ tilyakori.jpg
 - `sidewall` ↔ sherdor_ulugbeg.jpg · `dome`, `minaret` ↔ close detail
+
+## GLB path (`?gltf`)
+An opt-in Blender-authored GLB (`tools/blender/build_registan.py` ->
+`public/models/registan.glb`, loaded by `src/buildings/gltf.ts`) replaces the procedural
+madrasahs at ~6x lower cost (103 draw calls / 21,302 tris vs 646 / 126,244). It is judged
+against the same criteria and reference photos above. `node verify-gltf.mjs` renders both
+paths from the same camera into `docs/screenshots/verify-{procedural,gltf}.png`; the
+per-criterion gaps and the Blender-side fixes are tracked in
+`docs/research/gltf-parity-checklist.md`, which also lists the top 6 gaps to close before
+the GLB becomes the default.

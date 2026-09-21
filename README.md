@@ -6,7 +6,7 @@ An interactive, music-video-style 3D experience of the Registan square in Samark
 
 ## Features
 
-- Isometric Three.js scene with procedural geometry — no external 3D assets
+- Isometric Three.js scene with procedural geometry as the fallback path; an in-house Blender-authored GLB path is opt-in via `?gltf` (no third-party 3D assets)
 - Three madrasahs (Ulugh Beg, Sher-Dor, Tilya-Kori) with anatomically correct pishtaqs, minarets, and domes
 - Procedural majolica tile patterns (girih geometry, muqarnas, tiger spandrels, calligraphy)
 - Tap-to-move character with A* pathfinding on the tile grid
@@ -33,7 +33,21 @@ npm run build    # tsc + vite production build
 - **Vite** — dev server + production bundler
 - **Vitest** — unit tests for pathfinding, grid, coords, i18n, orbit math, audio determinism
 - **Playwright** — E2E screenshot and audio graph verification scripts
-- Procedural everything: patterns, geometry, and audio are all generated at runtime
+- Procedural everything: patterns, geometry, and audio are all generated at runtime (default path)
+
+### 3D asset pipeline (Blender → glTF)
+
+The procedural scene costs ~3,460 draw calls, ~1,000 materials and ~150 MB of canvas
+textures (`docs/research/perf-quality-plan.md`). The replacement is a Blender-authored GLB:
+
+```bash
+npm run model:build      # tools/blender/build_registan.py (bpy) → public/models/registan.glb
+npm run model:optimize   # scripts/optimize-glb.mjs (gltf-transform + meshopt) → registan.opt.glb
+npm run dev              # open http://localhost:5173/?gltf to load the GLB instead
+```
+
+The GLB path is opt-in behind `?gltf` until it matches `docs/benchmark.md`; the procedural
+path remains the fallback. Details: `docs/research/blender-pipeline.md`.
 
 ## Credits
 

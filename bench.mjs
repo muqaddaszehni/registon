@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { launchChromium } from './harness/browser.mjs';
 import { mkdirSync } from 'fs';
 
 const OUT = process.argv[2] || '/tmp/bench';
@@ -17,7 +17,7 @@ const SHOTS = [
   { n: 'tkiwan',    tx: 0,    ty: 6.5,tz: -12.5,az: Math.PI / 2, el: 0.06, zoom: 2.2 }, // straight into TK iwan → Zehni back wall
 ];
 
-const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu'] });
+const browser = await launchChromium({ args: ['--use-angle=metal', '--enable-gpu'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
 page.on('pageerror', e => console.log('EXC:', e.message));
 await page.goto(`http://localhost:${PORT}/?dbg`, { waitUntil: 'networkidle', timeout: 15000 });
